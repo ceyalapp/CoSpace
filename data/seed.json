@@ -1,0 +1,146 @@
+{
+  "user": {
+    "id": "priya",
+    "name": "Priya Menon",
+    "flat": "A-1402",
+    "block": "Tower A",
+    "avatar": "PM",
+    "avatarColor": "#C5705D",
+    "community": "Prestige Lakeside Habitat",
+    "communityShort": "Lakeside Habitat",
+    "members": 1247
+  },
+  "requirements": [
+    { "id": "solar",     "title": "Solar Panel Setup",       "emoji": "☀",   "active": 47, "plans": 12, "vendors": 23, "cost": "₹1.8L – ₹4.2L",   "heat": "hot",  "tint": "#FAEDB6" },
+    { "id": "ev",        "title": "EV Charger Installation", "emoji": "⚡",   "active": 31, "plans": 8,  "vendors": 14, "cost": "₹35K – ₹1.1L",    "heat": "hot",  "tint": "#DEE7F2" },
+    { "id": "interior",  "title": "Interior Design",         "emoji": "🛋",   "active": 64, "plans": 19, "vendors": 41, "cost": "₹3L – ₹18L",      "heat": "warm", "tint": "#F4DDD6" },
+    { "id": "kitchen",   "title": "Modular Kitchen",         "emoji": "🍳",   "active": 28, "plans": 11, "vendors": 22, "cost": "₹1.2L – ₹6L",     "heat": "warm", "tint": "#E7EBD9" },
+    { "id": "grill",     "title": "Grill & Safety Work",     "emoji": "🪟",   "active": 19, "plans": 5,  "vendors": 11, "cost": "₹18K – ₹85K",     "heat": "warm", "tint": "#E8E0D2" },
+    { "id": "paint",     "title": "Painting & Polish",       "emoji": "🎨",   "active": 22, "plans": 6,  "vendors": 17, "cost": "₹25K – ₹1.4L",    "heat": "warm", "tint": "#F1E2D7" },
+    { "id": "furniture", "title": "Furniture",               "emoji": "🪑",   "active": 17, "plans": 9,  "vendors": 19, "cost": "₹15K – ₹3L",      "heat": "cool", "tint": "#E9DFCB" },
+    { "id": "maid",      "title": "Maid Services",           "emoji": "🧹",   "active": 53, "plans": 0,  "vendors": 8,  "cost": "₹3K – ₹12K /mo",  "heat": "hot",  "tint": "#E7EBD9" },
+    { "id": "civil",     "title": "Civil & Repair Work",     "emoji": "🛠",   "active": 14, "plans": 4,  "vendors": 13, "cost": "varies",                          "heat": "cool", "tint": "#E8E0D2" },
+    { "id": "maint",     "title": "AMC & Maintenance",       "emoji": "🔧",   "active": 9,  "plans": 3,  "vendors": 9,  "cost": "₹2K – ₹15K /yr",  "heat": "cool", "tint": "#DCE7E0" }
+  ],
+  "residents": [
+    { "id": "anand",  "name": "Anand Raghavan", "flat": "C-0807", "avatar": "AR", "color": "#2F5D4E" },
+    { "id": "meera",  "name": "Meera Iyer",     "flat": "B-1103", "avatar": "MI", "color": "#E8B53A" },
+    { "id": "rohit",  "name": "Rohit Kulkarni", "flat": "A-0502", "avatar": "RK", "color": "#6E8FB5" },
+    { "id": "kavya",  "name": "Kavya Reddy",    "flat": "D-1206", "avatar": "KR", "color": "#A6586A" },
+    { "id": "sanjay", "name": "Sanjay Bhat",    "flat": "B-0204", "avatar": "SB", "color": "#4A7A5C" },
+    { "id": "neha",   "name": "Neha Aggarwal",  "flat": "A-0901", "avatar": "NA", "color": "#C5705D" },
+    { "id": "vikram", "name": "Vikram Shetty",  "flat": "C-1505", "avatar": "VS", "color": "#8B6F47" }
+  ],
+  "workspaces": {
+    "solar": {
+      "summary": {
+        "activeResidents": 47, "installedFlats": 12, "avgCost": "₹2.8L",
+        "avgPayback": "4.2 yrs", "vendorsDiscussed": 23, "activePolls": 2, "activeGroupBuy": true
+      },
+      "plans": [
+        { "id": "p1", "tier": "Budget",  "title": "3kW essentials",    "subtitle": "Lights + fans + 1 AC",   "cost": "₹1.8L – ₹2.1L", "payback": "5.1 yrs", "usedBy": 7,  "author": "anand",  "panels": "6 × 545W",  "inverter": "Microtek 3kVA",       "warranty": "10 yr panel · 5 yr inverter" },
+        { "id": "p2", "tier": "Family",  "title": "5kW family plan",   "subtitle": "2 BHK, 2 ACs, EV-ready", "cost": "₹2.7L – ₹3.1L", "payback": "4.2 yrs", "usedBy": 12, "author": "meera",  "panels": "10 × 545W", "inverter": "Luminous 5kVA hybrid","warranty": "25 yr panel · 10 yr inverter", "featured": true },
+        { "id": "p3", "tier": "Premium", "title": "7.5kW full home",   "subtitle": "3 BHK, 3 ACs, backup",   "cost": "₹3.9L – ₹4.4L", "payback": "3.8 yrs", "usedBy": 4,  "author": "vikram", "panels": "14 × 545W", "inverter": "Tata 7.5kVA hybrid",  "warranty": "25 yr panel · 10 yr inverter" }
+      ],
+      "threads": [
+        { "id": "t1", "author": "anand",  "title": "Net-metering took 38 days — here's the BESCOM checklist", "replies": 24, "likes": 41, "time": "2d", "tag": "guide",    "pinned": true },
+        { "id": "t2", "author": "kavya",  "title": "Anyone gone with Fenice over Sunkalp? Quote difference is ₹38K", "replies": 18, "likes": 22, "time": "5h", "tag": "question" },
+        { "id": "t3", "author": "meera",  "title": "Sharing my 11-month generation log (5kW, east-facing)",         "replies": 31, "likes": 67, "time": "1w", "tag": "data" },
+        { "id": "t4", "author": "rohit",  "title": "RWA approved rooftop usage — copy of the resolution",       "replies": 9,  "likes": 28, "time": "3d", "tag": "resource" },
+        { "id": "t5", "author": "sanjay", "title": "Monsoon cleaning: which service does the community use?",       "replies": 12, "likes": 14, "time": "6d", "tag": "question" }
+      ],
+      "polls": [
+        { "id": "pl1", "q": "Which inverter brand for the 5kW group buy?", "total": 38, "options": [
+          { "label": "Luminous Solar Hybrid", "votes": 19 },
+          { "label": "Microtek MaXX 5kVA",    "votes": 11 },
+          { "label": "Tata Power Hybrid",     "votes": 8 }
+        ]},
+        { "id": "pl2", "q": "Preferred installation window?", "total": 31, "options": [
+          { "label": "Before monsoon (Jun)",  "votes": 18 },
+          { "label": "Post-monsoon (Oct)",    "votes": 11 },
+          { "label": "Flexible",              "votes": 2 }
+        ]}
+      ],
+      "groupBuy": {
+        "title": "5kW Group Buy — Tower A & B",
+        "vendor": "Sunkalp Energy",
+        "target": 15, "joined": 11,
+        "discount": "12% + free 2-yr cleaning",
+        "closes": "May 24",
+        "perFlat": "₹2.64L (saves ₹36K)"
+      },
+      "resources": [
+        { "id": "r1", "title": "BESCOM net-metering application", "type": "pdf",   "size": "142 KB", "by": "anand"  },
+        { "id": "r2", "title": "Rooftop access — RWA resolution", "type": "pdf",   "size": "88 KB",  "by": "rohit"  },
+        { "id": "r3", "title": "Sunkalp quotation (5kW, hybrid)",  "type": "pdf",   "size": "210 KB", "by": "meera"  },
+        { "id": "r4", "title": "Fenice quotation (5kW, on-grid)",  "type": "pdf",   "size": "198 KB", "by": "kavya"  },
+        { "id": "r5", "title": "Generation log — May (5kW)",   "type": "xlsx",  "size": "34 KB",  "by": "meera"  },
+        { "id": "r6", "title": "Inverter spec comparison sheet",   "type": "sheet", "size": "—", "by": "anand"  }
+      ]
+    }
+  },
+  "vendors": [
+    { "id": "sunkalp",     "name": "Sunkalp Energy",      "cat": "solar",     "rating": 4.7, "jobs": 18, "score": 92, "price": "₹52K/kW",    "tag": "Community trusted","logo": "☀","color": "#E8B53A", "resp": "< 4 hrs", "est": "8 yrs",   "verified": true },
+    { "id": "fenice",      "name": "Fenice Solar",        "cat": "solar",     "rating": 4.4, "jobs": 9,  "score": 78, "price": "₹49K/kW",    "tag": "Best price",        "logo": "◆","color": "#C5705D", "resp": "< 6 hrs", "est": "5 yrs",   "verified": true },
+    { "id": "tata",        "name": "Tata Power Solar",    "cat": "solar",     "rating": 4.5, "jobs": 6,  "score": 81, "price": "₹58K/kW",    "tag": "Brand warranty",    "logo": "T",     "color": "#2F5D4E", "resp": "< 24 hrs","est": "20+ yrs", "verified": true },
+    { "id": "volt",        "name": "VoltMantra Chargers", "cat": "ev",        "rating": 4.6, "jobs": 14, "score": 87, "price": "₹42K avg",  "tag": "Quick install",    "logo": "⚡","color": "#6E8FB5", "resp": "< 2 hrs", "est": "4 yrs",   "verified": true },
+    { "id": "livspace",    "name": "Livspace",            "cat": "interior",  "rating": 4.2, "jobs": 11, "score": 74, "price": "₹1.4K/sqft","tag": "Full service",      "logo": "L",     "color": "#4A7A5C", "resp": "< 12 hrs","est": "10 yrs",  "verified": true },
+    { "id": "urbanladder", "name": "Urban Ladder",        "cat": "furniture", "rating": 4.3, "jobs": 22, "score": 80, "price": "varies",          "tag": "In-stock",          "logo": "U",     "color": "#8B6F47", "resp": "< 8 hrs", "est": "12 yrs",  "verified": true },
+    { "id": "shree",       "name": "Shree Grill Works",   "cat": "grill",     "rating": 4.8, "jobs": 27, "score": 94, "price": "₹420/sqft",  "tag": "Top in community", "logo": "▣","color": "#A6586A", "resp": "< 3 hrs", "est": "15 yrs",  "verified": true },
+    { "id": "cleansa",     "name": "Cleansa Solar Care",  "cat": "solar",     "rating": 4.5, "jobs": 31, "score": 85, "price": "₹1.8K/visit","tag": "AMC specialist",    "logo": "✦","color": "#4A7A5C", "resp": "< 6 hrs", "est": "6 yrs",   "verified": false }
+  ],
+  "vendorDetail": {
+    "sunkalp": {
+      "photos": 4,
+      "reviews": [
+        { "id": "rv1", "author": "meera",  "rating": 5, "time": "3 weeks ago",  "text": "Installed our 5kW hybrid system in 4 days. Net-meter approval done in 38 days — they handled the paperwork end-to-end." },
+        { "id": "rv2", "author": "anand",  "rating": 5, "time": "2 months ago", "text": "Quote was ₹18K higher than Fenice but build quality is visibly better. AC modules properly clamped, no zip-ties everywhere." },
+        { "id": "rv3", "author": "vikram", "rating": 4, "time": "4 months ago", "text": "Good work overall. Lost a star because cleanup after install took 2 days of follow-up. Otherwise solid team." }
+      ],
+      "services": ["On-grid", "Hybrid", "Off-grid", "AMC", "Net-metering paperwork"],
+      "jobsInCommunity": [
+        { "flat": "B-1103", "size": "5kW", "when": "Feb 2026" },
+        { "flat": "C-0807", "size": "3kW", "when": "Dec 2025" },
+        { "flat": "D-1206", "size": "7kW", "when": "Nov 2025" },
+        { "flat": "A-1502", "size": "5kW", "when": "Oct 2025" }
+      ]
+    }
+  },
+  "me": {
+    "activeReqs": [
+      { "id": "solar", "title": "Solar Panel Setup",   "stage": "Comparing vendors",   "progress": 0.55, "nextStep": "Get 1 more quote", "updated": "2d ago" },
+      { "id": "grill", "title": "Balcony grill work",  "stage": "Finalising design",   "progress": 0.75, "nextStep": "Approve drawing",  "updated": "5h ago" }
+    ],
+    "checklist": [
+      { "id": "c1", "text": "Get BESCOM consumer number",                  "done": true  },
+      { "id": "c2", "text": "Take roof photos (4 angles)",                  "done": true  },
+      { "id": "c3", "text": "Collect 3 quotes (Sunkalp, Fenice, Tata)",     "done": true  },
+      { "id": "c4", "text": "Confirm net-metering eligibility",             "done": false },
+      { "id": "c5", "text": "Get RWA sign-off on rooftop area",             "done": false },
+      { "id": "c6", "text": "Lock vendor + sign work order",                "done": false },
+      { "id": "c7", "text": "Schedule install (post-monsoon)",              "done": false }
+    ],
+    "budget": {
+      "planned": 285000, "spent": 12000,
+      "items": [
+        { "label": "Site survey + tokens", "amount": 12000,  "paid": true  },
+        { "label": "Vendor advance (40%)", "amount": 112000, "paid": false },
+        { "label": "Balance on install",   "amount": 161000, "paid": false }
+      ]
+    },
+    "shortlist": ["sunkalp", "fenice"],
+    "quotations": [
+      { "vendor": "Sunkalp Energy",  "amount": "₹2.78L", "date": "Apr 28", "best": true },
+      { "vendor": "Fenice Solar",    "amount": "₹2.42L", "date": "May 02" },
+      { "vendor": "Tata Power Solar","amount": "₹2.96L", "date": "May 05" }
+    ]
+  },
+  "plansList": [
+    { "id": "p2",  "cat": "solar",    "tier": "Family",  "title": "5kW family solar plan",   "cost": "₹2.7L – ₹3.1L", "usedBy": 12, "author": "meera",  "featured": true },
+    { "id": "p1",  "cat": "solar",    "tier": "Budget",  "title": "3kW essentials",          "cost": "₹1.8L – ₹2.1L", "usedBy": 7,  "author": "anand" },
+    { "id": "pe1", "cat": "ev",       "tier": "Budget",  "title": "3.3kW AC home charger",   "cost": "₹35K – ₹48K",   "usedBy": 9,  "author": "rohit" },
+    { "id": "pi1", "cat": "interior", "tier": "Premium", "title": "3BHK turnkey interior",   "cost": "₹14L – ₹18L",   "usedBy": 4,  "author": "kavya" },
+    { "id": "pk1", "cat": "kitchen",  "tier": "Family",  "title": "L-shape modular kitchen", "cost": "₹2.1L – ₹2.8L", "usedBy": 8,  "author": "neha" },
+    { "id": "pg1", "cat": "grill",    "tier": "Budget",  "title": "MS balcony grill (std.)", "cost": "₹18K – ₹32K",   "usedBy": 14, "author": "sanjay" }
+  ]
+}
