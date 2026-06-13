@@ -1,19 +1,36 @@
 // CollabBuy responsive web client.
-// React via CDN + Babel standalone. All state from /api/* REST endpoints.
+// Bundled with esbuild (see `npm run build`). Supabase Auth + Realtime; data via /api/*.
 
-const { useState, useEffect, useMemo, useCallback, useRef } = React;
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createRoot } from 'react-dom/client';
+import { createClient } from '@supabase/supabase-js';
 
-// ─── API client ─────────────────────────────────────────────
+if (!window.__SB_CONFIG || !window.__SB_CONFIG.url || !window.__SB_CONFIG.anonKey) {
+  throw new Error('config.js did not set window.__SB_CONFIG — check the server is running');
+}
+
+const sb = createClient(
+  window.__SB_CONFIG.url,
+  window.__SB_CONFIG.anonKey,
+  { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
+);
+
+// ─── API client (attaches Bearer token from supabase session) ─
+async function authHeaders() {
+  const { data } = await sb.auth.getSession();
+  return data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {};
+}
+
 const api = {
   async get(path) {
-    const r = await fetch('/api' + path);
+    const r = await fetch('/api' + path, { headers: await authHeaders() });
     if (!r.ok) throw new Error(`${r.status} ${path}`);
     return r.json();
   },
   async send(path, method, body) {
     const r = await fetch('/api' + path, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!r.ok && r.status !== 204) throw new Error(`${r.status} ${path}`);
@@ -61,6 +78,7 @@ function Icon({ name, size = 20, color = 'currentColor', strokeWidth = 1.6, styl
     heart: <path d="M12 21s-7-5-7-11a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 6-7 11-7 11z"/>,
     reply: <path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 0 1 7-13 8 8 0 0 1 8 8z"/>,
     shield: <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/>,
+    sparkles: <><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M19 14l1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/></>,
   };
   const isFilled = name === 'starFill';
   return (
@@ -94,6 +112,165 @@ function Toast({ msg }) {
   return msg ? <div className="toast">{msg}</div> : null;
 }
 
+// ─── BottomSheet / Modal primitive ───────────────────────────
+function BottomSheet({ open, onClose, title, children, isDesktop }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className={`sheet ${isDesktop ? 'sheet-desktop' : 'sheet-mobile'}`} onClick={e => e.stopPropagation()}>
+        <div className="sheet-grabber" />
+        <div className="sheet-head">
+          <h3>{title}</h3>
+          <button className="sheet-close" onClick={onClose} aria-label="Close">
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+        <div className="sheet-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── NewRequirementSheet ─────────────────────────────────────
+function NewRequirementSheet({ open, onClose, onCreated, isDesktop }) {
+  const [title, setTitle] = useState('');
+  const [cat, setCat] = useState('home');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => { if (open) { setTitle(''); setCat('home'); setErr(null); setBusy(false); } }, [open]);
+
+  const cats = [
+    { id: 'home',    label: 'Home setup',        emoji: '🏠' },
+    { id: 'service', label: 'Recurring service', emoji: '🔧' },
+    { id: 'admin',   label: 'RWA / admin',       emoji: '📋' },
+    { id: 'event',   label: 'Community event',   emoji: '🎉' },
+  ];
+
+  const submit = async () => {
+    const t = title.trim();
+    if (t.length < 3) { setErr('Give it a name (3+ chars).'); return; }
+    setBusy(true); setErr(null);
+    try {
+      const emoji = cats.find(c => c.id === cat)?.emoji;
+      const created = await api.post('/requirements', { title: t, category: cat, emoji });
+      onCreated?.(created);
+      onClose();
+    } catch (e) {
+      setErr(e.message || 'Could not create. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Start a new requirement" isDesktop={isDesktop}>
+      <p className="sheet-blurb">Before you create one — search to see if a neighbour already started this. Duplicate spaces split the knowledge.</p>
+
+      <label className="form-label">What are you trying to do?</label>
+      <input
+        className="form-input"
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        placeholder="e.g. Install soundproof windows"
+        autoFocus
+        maxLength={80}
+      />
+
+      <label className="form-label" style={{ marginTop: 16 }}>Category</label>
+      <div className="cat-pick-grid">
+        {cats.map(c => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => setCat(c.id)}
+            className={`cat-pick ${cat === c.id ? 'is-active' : ''}`}>
+            <span style={{ marginRight: 6 }}>{c.emoji}</span>{c.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="sheet-hint">
+        <Icon name="sparkles" size={16} color="#7B5A0E" style={{ marginTop: 2, flex: 'none' }} />
+        <span>We'll add this to your active list — neighbours can join and share knowledge as it grows.</span>
+      </div>
+
+      {err && <div className="form-err">{err}</div>}
+
+      <button className="btn btn-primary btn-full" disabled={busy} onClick={submit}>
+        {busy ? 'Creating…' : 'Create requirement'} {!busy && <Icon name="arrowRight" size={14} />}
+      </button>
+    </BottomSheet>
+  );
+}
+
+// ─── NotificationsSheet ──────────────────────────────────────
+function NotificationsSheet({ open, onClose, onOpenReq, onOpenVendor, onRead, isDesktop }) {
+  const [items, setItems] = useState([]);
+  const [filter, setFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    api.get('/notifications').then(r => {
+      setItems(r.items || []);
+      setLoading(false);
+      // Opening the sheet marks everything read; clear the bell badge.
+      if ((r.unread || 0) > 0) {
+        api.post('/notifications/read').then(() => onRead?.()).catch(() => {});
+      }
+    }).catch(() => { setItems([]); setLoading(false); });
+  }, [open]);
+
+  const filtered = filter === 'unread' ? items.filter(i => i.unread) : items;
+  const unreadCount = items.filter(i => i.unread).length;
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Notifications" isDesktop={isDesktop}>
+      <div className="notif-chips">
+        <button className={`chip ${filter === 'all' ? 'is-active' : ''}`} onClick={() => setFilter('all')}>All</button>
+        <button className={`chip ${filter === 'unread' ? 'is-active' : ''}`} onClick={() => setFilter('unread')}>Unread · {unreadCount}</button>
+      </div>
+
+      {loading && <div className="notif-empty">Loading…</div>}
+      {!loading && filtered.length === 0 && <div className="notif-empty">Nothing new yet.</div>}
+
+      <div className="notif-list">
+        {filtered.map((it) => {
+          const onClick = () => {
+            if (it.link?.kind === 'req') { onOpenReq?.(it.link.id); }
+            else if (it.link?.kind === 'vendor') { onOpenVendor?.(it.link.id); }
+            onClose();
+          };
+          return (
+            <button key={it.id} className={`notif-item ${it.unread ? 'is-unread' : ''}`} onClick={onClick}>
+              {it.unread && <span className="notif-dot" />}
+              <div className={`notif-ico notif-${it.tone}`}>
+                <Icon name={it.icon} size={18} />
+              </div>
+              <div className="notif-body">
+                <div className="notif-row1">
+                  <span className="notif-title">{it.title}</span>
+                  <span className="notif-time">{it.time}</span>
+                </div>
+                <div className="notif-sub">{it.sub}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </BottomSheet>
+  );
+}
+
 // ─── Top-level App ───────────────────────────────────────────
 const TABS = [
   { id: 'home',    label: 'Explore', icon: 'home' },
@@ -102,6 +279,98 @@ const TABS = [
   { id: 'me',      label: 'Me',      icon: 'user' },
 ];
 
+// ─── Onboarding (new members: pick/create community + profile) ─
+function OnboardingScreen({ onDone }) {
+  const [communities, setCommunities] = useState(null);
+  const [mode, setMode]   = useState('join');   // 'join' | 'create'
+  const [name, setName]   = useState('');
+  const [flat, setFlat]   = useState('');
+  const [block, setBlock] = useState('');
+  const [communityId, setCommunityId] = useState('');
+  const [newName, setNewName] = useState('');
+  const [status, setStatus]   = useState('idle');
+  const [err, setErr]         = useState('');
+
+  useEffect(() => {
+    api.get('/communities')
+      .then(list => { setCommunities(list); if (list[0]) setCommunityId(list[0].id); })
+      .catch(() => setCommunities([]));
+  }, []);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (name.trim().length < 2) { setErr('Please enter your name.'); return; }
+    if (mode === 'join' && !communityId) { setErr('Pick a community.'); return; }
+    if (mode === 'create' && newName.trim().length < 2) { setErr('Name your community.'); return; }
+    setStatus('busy'); setErr('');
+    try {
+      await api.post('/me/onboard', {
+        name: name.trim(), flat: flat.trim(), block: block.trim(),
+        ...(mode === 'join' ? { communityId } : { newCommunityName: newName.trim() }),
+      });
+      onDone();
+    } catch (e2) { setStatus('idle'); setErr('Something went wrong. Try again.'); }
+  };
+
+  const inputStyle = { padding: 12, borderRadius: 12, border: '1px solid var(--cb-border)', font: 'inherit', width: '100%' };
+
+  return (
+    <div className="boot" style={{ padding: 24, alignItems: 'flex-start', overflowY: 'auto' }}>
+      <div className="card card-pad" style={{ maxWidth: 440, width: '100%', margin: '32px auto' }}>
+        <div className="text-display font-bold" style={{ fontSize: 22 }}>Welcome to CollabBuy</div>
+        <div className="text-sm muted mt-2">Tell your neighbours who you are, and join your community.</div>
+
+        <form onSubmit={submit} className="mt-4" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <label className="text-xs muted">Your name</label>
+          <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Priya Menon" style={inputStyle} />
+
+          <div className="flex gap-2">
+            <div style={{ flex: 1 }}>
+              <label className="text-xs muted">Flat</label>
+              <input value={flat} onChange={e => setFlat(e.target.value)} placeholder="C-0807" style={inputStyle} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="text-xs muted">Block</label>
+              <input value={block} onChange={e => setBlock(e.target.value)} placeholder="C" style={inputStyle} />
+            </div>
+          </div>
+
+          <div className="flex gap-2 mt-2" role="tablist">
+            <button type="button" role="tab"
+              className={`chip ${mode === 'join' ? 'chip-sage' : ''}`}
+              onClick={() => setMode('join')}>Join a community</button>
+            <button type="button" role="tab"
+              className={`chip ${mode === 'create' ? 'chip-sage' : ''}`}
+              onClick={() => setMode('create')}>Create new</button>
+          </div>
+
+          {mode === 'join' && (
+            communities === null
+              ? <div className="text-sm muted">Loading communities…</div>
+              : communities.length === 0
+                ? <div className="text-sm muted">No communities yet — create the first one.</div>
+                : <select value={communityId} onChange={e => setCommunityId(e.target.value)} style={inputStyle}>
+                    {communities.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} · {c.members} {c.members === 1 ? 'member' : 'members'}</option>
+                    ))}
+                  </select>
+          )}
+
+          {mode === 'create' && (
+            <input value={newName} onChange={e => setNewName(e.target.value)}
+              placeholder="e.g. Prestige Lakeside Habitat" style={inputStyle} />
+          )}
+
+          <button className="btn btn-primary mt-2" disabled={status === 'busy'}>
+            {status === 'busy' ? 'Setting up…' : 'Enter CollabBuy'}
+          </button>
+          {err && <div className="text-xs" style={{ color: '#A6586A' }}>{err}</div>}
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const { isDesktop } = useViewport();
   const [tab, setTab] = useState('home');
@@ -109,10 +378,18 @@ function App() {
   const [me, setMe] = useState(null);
   const [meErr, setMeErr] = useState(null);
   const [toast, setToast] = useState(null);
+  const [sheet, setSheet] = useState(null); // 'newRequirement' | 'notifications' | null
+  const [meBump, setMeBump] = useState(0);
+  const [notifUnread, setNotifUnread] = useState(0);
 
   useEffect(() => {
     api.get('/me').then(setMe).catch(err => setMeErr(err.message || 'Failed to load'));
+  }, [meBump]);
+
+  const refreshNotif = useCallback(() => {
+    api.get('/notifications').then(r => setNotifUnread(r.unread || 0)).catch(() => {});
   }, []);
+  useEffect(() => { refreshNotif(); }, [meBump, refreshNotif]);
 
   const showToast = useCallback((msg) => {
     setToast(msg);
@@ -123,14 +400,18 @@ function App() {
   const navigate = useCallback((next) => setStack(s => [...s, next]), []);
   const goBack = useCallback(() => setStack(s => s.slice(0, -1)), []);
   const goTab = useCallback((t) => { setTab(t); setStack([]); }, []);
+  const openSheet = useCallback((s) => setSheet(s), []);
+  const closeSheet = useCallback(() => setSheet(null), []);
+  const refreshMe = useCallback(() => setMeBump(b => b + 1), []);
 
   if (meErr) return (
     <div className="boot"><div className="boot-label">Couldn't reach the server.</div>
       <button className="btn btn-primary" onClick={() => { setMeErr(null); api.get('/me').then(setMe).catch(err => setMeErr(err.message || 'Failed to load')); }}>Retry</button></div>
   );
   if (!me) return null;
+  if (me.needsOnboarding) return <OnboardingScreen onDone={refreshMe} />;
 
-  const ctx = { me, navigate, goBack, goTab, tab, showToast, isDesktop };
+  const ctx = { me, navigate, goBack, goTab, tab, showToast, isDesktop, openSheet, refreshMe, notifUnread, refreshNotif };
 
   const screen = (() => {
     if (route.kind === 'req')     return <RequirementScreen ctx={ctx} reqId={route.id} />;
@@ -147,9 +428,27 @@ function App() {
   return (
     <div className="app">
       {isDesktop
-        ? <DesktopShell tab={tab} onTab={goTab} me={me}>{screen}</DesktopShell>
+        ? <DesktopShell tab={tab} onTab={goTab} me={me} onOpenSheet={openSheet} notifUnread={notifUnread}>{screen}</DesktopShell>
         : <MobileShell tab={tab} onTab={goTab}>{screen}</MobileShell>}
       <Toast msg={toast} />
+      <NewRequirementSheet
+        open={sheet === 'newRequirement'}
+        onClose={closeSheet}
+        isDesktop={isDesktop}
+        onCreated={(req) => {
+          showToast(`Started "${req.title}"`);
+          refreshMe();
+          navigate({ kind: 'req', id: req.id });
+        }}
+      />
+      <NotificationsSheet
+        open={sheet === 'notifications'}
+        onClose={closeSheet}
+        isDesktop={isDesktop}
+        onOpenReq={(id) => navigate({ kind: 'req', id })}
+        onOpenVendor={(id) => navigate({ kind: 'vendor', id })}
+        onRead={refreshNotif}
+      />
     </div>
   );
 }
@@ -171,7 +470,7 @@ function MobileShell({ tab, onTab, children }) {
   );
 }
 
-function DesktopShell({ tab, onTab, me, children }) {
+function DesktopShell({ tab, onTab, me, onOpenSheet, notifUnread = 0, children }) {
   return (
     <div className="shell-desktop">
       <aside className="sidebar">
@@ -190,6 +489,15 @@ function DesktopShell({ tab, onTab, me, children }) {
             </button>
           ))}
         </nav>
+        <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button className="btn btn-primary" style={{ justifyContent: 'flex-start' }} onClick={() => onOpenSheet?.('newRequirement')}>
+            <Icon name="plus" size={14} /> New requirement
+          </button>
+          <button className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => onOpenSheet?.('notifications')}>
+            <Icon name="bell" size={14} /> Notifications
+            {notifUnread > 0 && <span className="bell-badge" style={{ position: 'static', marginLeft: 'auto' }}>{notifUnread}</span>}
+          </button>
+        </div>
         <div className="me-block">
           <Avatar name={me.avatar} color={me.avatarColor} size={36} />
           <div style={{ minWidth: 0 }}>
@@ -205,7 +513,7 @@ function DesktopShell({ tab, onTab, me, children }) {
 
 // ─── Home (Explore) ─────────────────────────────────────────
 function HomeScreen({ ctx }) {
-  const { me, navigate, goTab, isDesktop } = ctx;
+  const { me, navigate, goTab, isDesktop, openSheet, notifUnread } = ctx;
   const [reqs, setReqs] = useState([]);
   const [solar, setSolar] = useState(null);
 
@@ -231,7 +539,10 @@ function HomeScreen({ ctx }) {
               </div>
             </div>
           </div>
-          <button className="bell"><Icon name="bell" size={18} /></button>
+          <button className="bell" onClick={() => openSheet('notifications')} aria-label="Notifications">
+            <Icon name="bell" size={18} />
+            {notifUnread > 0 && <span className="bell-badge">{notifUnread}</span>}
+          </button>
         </div>
       )}
 
@@ -269,7 +580,7 @@ function HomeScreen({ ctx }) {
         </div>
       )}
 
-      {activeReq && (
+      {activeReq ? (
         <>
           <div className="section-head"><h3>Pick up where you left off</h3></div>
           <div style={{ padding: isDesktop ? 0 : '0 20px 28px' }}>
@@ -295,6 +606,20 @@ function HomeScreen({ ctx }) {
             </button>
           </div>
         </>
+      ) : (
+        <>
+          <div className="section-head"><h3>Start planning</h3></div>
+          <div style={{ padding: isDesktop ? 0 : '0 20px 28px' }}>
+            <button className="card card-pad empty-cta" onClick={() => openSheet('newRequirement')}>
+              <div className="empty-cta-ico"><Icon name="plus" size={22} /></div>
+              <div style={{ flex: 1, textAlign: 'left' }}>
+                <div className="text-display font-semibold text-lg">Add your first requirement</div>
+                <div className="text-sm muted mt-1">Track a home project, service, or community event — and pull neighbours in.</div>
+              </div>
+              <Icon name="chevronRight" size={20} color="var(--cb-muted)" />
+            </button>
+          </div>
+        </>
       )}
 
       <div className="section-head"><h3>Hot in your community</h3><button className="action" onClick={() => goTab('vendors')}>See all</button></div>
@@ -313,7 +638,12 @@ function HomeScreen({ ctx }) {
         ))}
       </div>
 
-      <div className="section-head"><h3>All requirements</h3></div>
+      <div className="section-head">
+        <h3>All requirements</h3>
+        <button className="action" onClick={() => openSheet('newRequirement')}>
+          <Icon name="plus" size={14} /> Create new
+        </button>
+      </div>
       <div className="cat-grid">
         {reqs.map(r => (
           <button key={r.id} className="cat-tile" onClick={() => navigate({ kind: 'req', id: r.id })}>
@@ -332,14 +662,47 @@ function HomeScreen({ ctx }) {
 
 // ─── Requirement detail ─────────────────────────────────────
 function RequirementScreen({ ctx, reqId }) {
-  const { navigate, goBack, showToast, isDesktop } = ctx;
+  const { me, navigate, goBack, showToast, isDesktop, refreshMe } = ctx;
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  const [trackBusy, setTrackBusy] = useState(false);
+
+  const isTracking = (me.activeReqs || []).some(r => r.id === reqId);
 
   useEffect(() => {
     setData(null); setErr(null);
-    api.get(`/requirements/${reqId}`).then(setData).catch(e => setErr(e.message));
+    const load = () => api.get(`/requirements/${reqId}`).then(setData).catch(e => setErr(e.message));
+    load();
+
+    let timer;
+    const refetch = () => { clearTimeout(timer); timer = setTimeout(load, 200); };
+    const ch = sb.channel(`req:${reqId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'threads',     filter: `requirement_id=eq.${reqId}` }, refetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'polls',       filter: `requirement_id=eq.${reqId}` }, refetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_options' },                                       refetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_buys',  filter: `requirement_id=eq.${reqId}` }, refetch)
+      .subscribe();
+    return () => { clearTimeout(timer); sb.removeChannel(ch); };
   }, [reqId]);
+
+  const toggleTracking = async () => {
+    if (trackBusy) return;
+    setTrackBusy(true);
+    try {
+      if (isTracking) {
+        await api.del(`/me/active-requirements/${reqId}`);
+        showToast('Removed from My active');
+      } else {
+        await api.post(`/me/active-requirements/${reqId}`, {});
+        showToast('Added to My active');
+      }
+      refreshMe?.();
+    } catch (e) {
+      showToast('Could not update');
+    } finally {
+      setTrackBusy(false);
+    }
+  };
 
   if (err) return <div><BackBar onBack={goBack} title="Couldn't load" /><div style={{ padding: '0 20px' }} className="text-sm muted">{err}</div></div>;
   if (!data) return <BackBar onBack={goBack} title="Loading…" />;
@@ -350,6 +713,17 @@ function RequirementScreen({ ctx, reqId }) {
   return (
     <div>
       <BackBar onBack={goBack} title={data.title} subtitle={`${data.active} active · ${data.vendors.length} vendors`} />
+
+      <div style={{ padding: isDesktop ? '0 0 16px' : '0 20px 16px' }}>
+        <button
+          className={`btn ${isTracking ? 'btn-ghost' : 'btn-primary'}`}
+          style={{ width: '100%', justifyContent: 'center' }}
+          disabled={trackBusy}
+          onClick={toggleTracking}>
+          <Icon name={isTracking ? 'check' : 'plus'} size={16} />
+          {trackBusy ? '…' : (isTracking ? 'Tracking · tap to remove' : 'Add to My active')}
+        </button>
+      </div>
 
       <div style={{ padding: isDesktop ? 0 : '0 20px', maxWidth: '100%' }}>
         <div className="detail-grid">
@@ -685,7 +1059,12 @@ function VendorScreen({ ctx, vendorId }) {
 
   useEffect(() => {
     setV(null); setErr(null); setDraft({ rating: 5, text: '' });
-    api.get(`/vendors/${vendorId}`).then(setV).catch(e => setErr(e.message));
+    const load = () => api.get(`/vendors/${vendorId}`).then(setV).catch(e => setErr(e.message));
+    load();
+    const ch = sb.channel(`vendor:${vendorId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vendor_reviews', filter: `vendor_id=eq.${vendorId}` }, load)
+      .subscribe();
+    return () => sb.removeChannel(ch);
   }, [vendorId]);
 
   if (err) return <div><BackBar onBack={goBack} title="Couldn't load" /><div style={{ padding: '0 20px' }} className="text-sm muted">{err}</div></div>;
@@ -864,10 +1243,14 @@ function MeScreen({ ctx }) {
             <div className="text-display font-bold" style={{ fontSize: 18 }}>{me.name}</div>
             <div className="text-sm muted">{me.flat} · {me.community}</div>
           </div>
+          <button className="btn btn-ghost" onClick={() => sb.auth.signOut()}>Sign out</button>
         </div>
 
         <section className="card card-pad mb-4">
           <h3 className="text-display" style={{ margin: '0 0 12px', fontSize: 17 }}>Active requirements</h3>
+          {me.activeReqs.length === 0 && (
+            <div className="text-sm muted">Nothing in progress yet. Explore what your community is planning and add a requirement to track it here.</div>
+          )}
           {me.activeReqs.map(r => (
             <button key={r.id} className="row-between" style={{ width: '100%', padding: '12px 0', borderBottom: '1px solid var(--cb-border)', textAlign: 'left' }}
               onClick={() => navigate({ kind: 'req', id: r.id })}>
@@ -883,10 +1266,11 @@ function MeScreen({ ctx }) {
 
         <section className="card card-pad mb-4">
           <div className="row-between mb-3">
-            <h3 className="text-display" style={{ margin: 0, fontSize: 17 }}>Solar install checklist</h3>
+            <h3 className="text-display" style={{ margin: 0, fontSize: 17 }}>My checklist</h3>
             <span className="chip chip-sage">{done}/{total}</span>
           </div>
-          <Progress value={pct} />
+          {total > 0 && <Progress value={pct} />}
+          {total === 0 && <div className="text-sm muted">No steps yet — add the first thing you need to do below.</div>}
           <div className="mt-4">
             {checklist.map(c => (
               <div key={c.id} className="checklist-item">
@@ -906,6 +1290,9 @@ function MeScreen({ ctx }) {
 
         <section className="card card-pad mb-4">
           <h3 className="text-display" style={{ margin: '0 0 12px', fontSize: 17 }}>Shortlist</h3>
+          {me.shortlistVendors.length === 0 && (
+            <div className="text-sm muted">No saved vendors yet. Tap the bookmark on any vendor to shortlist them for comparison.</div>
+          )}
           {me.shortlistVendors.map(v => (
             <button key={v.id} className="vendor-row" style={{ width: '100%', textAlign: 'left' }}
                     onClick={() => navigate({ kind: 'vendor', id: v.id })}>
@@ -921,6 +1308,9 @@ function MeScreen({ ctx }) {
 
         <section className="card card-pad mb-4">
           <h3 className="text-display" style={{ margin: '0 0 12px', fontSize: 17 }}>Quotations</h3>
+          {me.quotations.length === 0 && (
+            <div className="text-sm muted">No quotes logged yet. Once vendors send estimates, track and compare them here.</div>
+          )}
           {me.quotations.map((q, i) => (
             <div key={i} className="row-between" style={{ padding: '10px 0', borderBottom: '1px solid var(--cb-border)' }}>
               <div>
@@ -937,6 +1327,10 @@ function MeScreen({ ctx }) {
 
         <section className="card card-pad mb-4">
           <h3 className="text-display" style={{ margin: '0 0 12px', fontSize: 17 }}>Budget</h3>
+          {me.budget.planned === 0 && me.budget.items.length === 0 ? (
+            <div className="text-sm muted">No budget set yet. As you plan a requirement, your planned and spent amounts will show up here.</div>
+          ) : (
+          <>
           <div className="row-between">
             <span className="text-sm muted">Planned</span>
             <span className="text-display font-semibold" style={{ fontSize: 16 }}>₹{(me.budget.planned / 1000).toFixed(0)}K</span>
@@ -945,7 +1339,7 @@ function MeScreen({ ctx }) {
             <span className="text-sm muted">Spent so far</span>
             <span className="text-display font-semibold" style={{ fontSize: 16 }}>₹{(me.budget.spent / 1000).toFixed(0)}K</span>
           </div>
-          <div className="mt-3"><Progress value={me.budget.spent / me.budget.planned} /></div>
+          <div className="mt-3"><Progress value={me.budget.planned ? me.budget.spent / me.budget.planned : 0} /></div>
           <div className="mt-4">
             {me.budget.items.map((it, i) => (
               <div key={i} className="row-between" style={{ padding: '8px 0', fontSize: 13 }}>
@@ -956,6 +1350,8 @@ function MeScreen({ ctx }) {
               </div>
             ))}
           </div>
+          </>
+          )}
         </section>
       </div>
     </div>
@@ -1056,6 +1452,159 @@ function BackBar({ onBack, title, subtitle }) {
   );
 }
 
+// ─── Login screen (email magic-link or phone OTP) ──────────
+function LoginScreen() {
+  const [mode, setMode]     = useState('email');   // 'email' | 'phone'
+  const [email, setEmail]   = useState('');
+  const [phone, setPhone]   = useState('');
+  const [code, setCode]     = useState('');
+  const [step, setStep]     = useState('input');   // 'input' | 'sent' (email) | 'otp' (phone) | 'done'
+  const [status, setStatus] = useState('idle');    // 'idle' | 'busy' | 'error'
+  const [err, setErr]       = useState('');
+
+  const normalisePhone = (s) => s.replace(/[^\d+]/g, '');
+
+  const sendEmail = async (e) => {
+    e.preventDefault();
+    const addr = email.trim().toLowerCase();
+    if (!addr) return;
+    setStatus('busy'); setErr('');
+    const { error } = await sb.auth.signInWithOtp({
+      email: addr,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) { setStatus('error'); setErr(error.message); return; }
+    setStatus('idle'); setStep('sent');
+  };
+
+  const sendSms = async (e) => {
+    e.preventDefault();
+    const num = normalisePhone(phone);
+    if (!num.startsWith('+') || num.length < 8) {
+      setStatus('error'); setErr('Use international format, e.g. +91 9876543210');
+      return;
+    }
+    setStatus('busy'); setErr('');
+    const { error } = await sb.auth.signInWithOtp({ phone: num });
+    if (error) { setStatus('error'); setErr(error.message); return; }
+    setStatus('idle'); setStep('otp');
+  };
+
+  const verifySms = async (e) => {
+    e.preventDefault();
+    const num = normalisePhone(phone);
+    const token = code.trim();
+    if (!token) return;
+    setStatus('busy'); setErr('');
+    const { error } = await sb.auth.verifyOtp({ phone: num, token, type: 'sms' });
+    if (error) { setStatus('error'); setErr(error.message); return; }
+    setStatus('idle'); // onAuthStateChange in Root will swap to <App />
+  };
+
+  const reset = () => { setStep('input'); setStatus('idle'); setErr(''); setCode(''); };
+
+  const inputStyle = { padding: 12, borderRadius: 12, border: '1px solid var(--cb-border)', font: 'inherit' };
+
+  return (
+    <div className="boot" style={{ padding: 24 }}>
+      <div className="card card-pad" style={{ maxWidth: 400, width: '100%' }}>
+        <div className="text-display font-bold" style={{ fontSize: 22 }}>CollabBuy</div>
+        <div className="text-sm muted mt-2">Sign in to your community workspace.</div>
+
+        {step === 'input' && (
+          <>
+            <div className="flex gap-2 mt-4" role="tablist">
+              <button type="button" role="tab"
+                className={`chip ${mode === 'email' ? 'chip-sage' : ''}`}
+                onClick={() => { setMode('email'); reset(); }}>Email</button>
+              <button type="button" role="tab"
+                className={`chip ${mode === 'phone' ? 'chip-sage' : ''}`}
+                onClick={() => { setMode('phone'); reset(); }}>Phone</button>
+            </div>
+
+            {mode === 'email' && (
+              <form onSubmit={sendEmail} className="mt-4" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <input type="email" required autoFocus value={email}
+                  onChange={e => setEmail(e.target.value)} placeholder="you@example.com" style={inputStyle} />
+                <button className="btn btn-primary" disabled={status === 'busy'}>
+                  {status === 'busy' ? 'Sending…' : 'Send magic link'}
+                </button>
+              </form>
+            )}
+
+            {mode === 'phone' && (
+              <form onSubmit={sendSms} className="mt-4" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <input type="tel" required autoFocus value={phone} inputMode="tel"
+                  onChange={e => setPhone(e.target.value)} placeholder="+91 9876543210" style={inputStyle} />
+                <div className="text-xs muted">Include your country code.</div>
+                <button className="btn btn-primary" disabled={status === 'busy'}>
+                  {status === 'busy' ? 'Sending…' : 'Send code'}
+                </button>
+              </form>
+            )}
+          </>
+        )}
+
+        {step === 'sent' && (
+          <div className="mt-4">
+            <div className="text-sm">Check <strong>{email}</strong> for a magic link.</div>
+            <button className="btn btn-ghost mt-3" onClick={reset}>Use a different email</button>
+          </div>
+        )}
+
+        {step === 'otp' && (
+          <form onSubmit={verifySms} className="mt-4" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="text-sm">Enter the 6-digit code sent to <strong>{normalisePhone(phone)}</strong>.</div>
+            <input type="text" required autoFocus value={code} inputMode="numeric" maxLength={6}
+              onChange={e => setCode(e.target.value.replace(/\D/g, ''))} placeholder="123456"
+              style={{ ...inputStyle, letterSpacing: '0.4em', textAlign: 'center', fontSize: 18 }} />
+            <button className="btn btn-primary" disabled={status === 'busy' || code.length < 6}>
+              {status === 'busy' ? 'Verifying…' : 'Verify'}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={reset}>Use a different number</button>
+          </form>
+        )}
+
+        {err && <div className="text-xs mt-3" style={{ color: '#A6586A' }}>{err}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Root: gate App behind a Supabase session ────────────────
+function Root() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    sb.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false); });
+    const { data: sub } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (loading) return null;
+  return session ? <App /> : <LoginScreen />;
+}
+
+// ─── Error boundary: a render error shows a recoverable message, not a blank screen ─
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('Render error:', error, info); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="boot" style={{ padding: 24 }}>
+        <div className="card card-pad" style={{ maxWidth: 420, textAlign: 'center' }}>
+          <div className="text-display font-bold" style={{ fontSize: 20 }}>Something went wrong</div>
+          <div className="text-sm muted mt-2">The app hit an unexpected error. Reloading usually fixes it.</div>
+          <button className="btn btn-primary mt-4" onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      </div>
+    );
+  }
+}
+
 // ─── Mount ──────────────────────────────────────────────────
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+const root = createRoot(document.getElementById('root'));
+root.render(<ErrorBoundary><Root /></ErrorBoundary>);
