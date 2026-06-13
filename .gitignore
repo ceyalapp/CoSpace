@@ -1,5 +1,10 @@
 node_modules/
+public/app.bundle.js
+public/app.bundle.js.map
 data/state.json
 .claude/
 .DS_Store
 *.log
+.env
+.env.local
+scripts/design-ref/

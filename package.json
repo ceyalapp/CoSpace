@@ -4,13 +4,25 @@
   "description": "CollabBuy — community group-buy app for residential decisions. REST API + responsive web client.",
   "main": "server.js",
   "scripts": {
+    "build": "esbuild public/app.jsx --bundle --outfile=public/app.bundle.js --minify --sourcemap --target=es2018",
+    "prestart": "npm run build",
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "npm run build && node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "@supabase/supabase-js": "^2.105.4",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2"
   }
 }
