@@ -567,7 +567,7 @@ app.get('/api/requirements/:id', requireAuth, async (req, res) => {
   }
   const myPolls = (polls.data || []);
 
-  const workspace = (s || (plans.data?.length) || (threads.data?.length)) ? {
+  const workspace = (s || plans.data?.length || threads.data?.length || myPolls.length || resources.data?.length || vendors.data?.length) ? {
     summary: {
       activeResidents: s?.active_residents || 0,
       installedFlats:  s?.installed_flats  || 0,
@@ -657,6 +657,140 @@ app.post('/api/threads/:id/like', requireAuth, async (req, res) => {
   if (e2) return handleErr(res, e2);
   if (!data) return res.status(404).json({ error: 'thread not found' });
   res.json(threadOut(data));
+});
+
+app.post('/api/threads', requireAuth, async (req, res) => {
+  const title = (req.body?.title || '').toString().trim().slice(0, 140);
+  const requirementId = (req.body?.requirementId || '').toString();
+  const tag = (req.body?.tag || 'Question').toString().trim().slice(0, 24) || 'Question';
+  if (title.length < 4) return res.status(400).json({ error: 'title (4+ chars) required' });
+  if (!requirementId)   return res.status(400).json({ error: 'requirementId required' });
+
+  const { data: reqRow, error: rErr } = await req.sb.from('requirements')
+    .select('id, community_id').eq('id', requirementId).maybeSingle();
+  if (rErr)    return handleErr(res, rErr);
+  if (!reqRow) return res.status(404).json({ error: 'requirement not found' });
+
+  const { data: a, error: aErr } = await req.sb.from('authors')
+    .select('id').eq('profile_id', req.user.id).maybeSingle();
+  if (aErr) return handleErr(res, aErr);
+  if (!a)   return res.status(403).json({ error: 'no linked author' });
+
+  const id = 't' + Date.now().toString(36);
+  const { data, error } = await req.sb.from('threads')
+    .insert({ id, requirement_id: requirementId, community_id: reqRow.community_id, author_id: a.id, title, tag, pinned: false, likes: 0, reply_count: 0, time_label: 'just now' })
+    .select('*, authors(*)').single();
+  if (error) return handleErr(res, error);
+  res.status(201).json(threadOut(data));
+});
+
+app.post('/api/plans', requireAuth, async (req, res) => {
+  const requirementId = (req.body?.requirementId || '').toString();
+  const title = (req.body?.title || '').toString().trim().slice(0, 80);
+  const tier = (req.body?.tier || '').toString();
+  const subtitle = (req.body?.subtitle || '').toString().trim().slice(0, 120) || null;
+  const cost = (req.body?.cost || '').toString().trim().slice(0, 40) || null;
+  const payback = (req.body?.payback || '').toString().trim().slice(0, 40) || null;
+  const panels = (req.body?.panels || '').toString().trim().slice(0, 60) || null;
+  const inverter = (req.body?.inverter || '').toString().trim().slice(0, 60) || null;
+  if (title.length < 3) return res.status(400).json({ error: 'title (3+ chars) required' });
+  if (!['Budget', 'Family', 'Premium'].includes(tier)) return res.status(400).json({ error: 'tier must be Budget, Family, or Premium' });
+  if (!requirementId) return res.status(400).json({ error: 'requirementId required' });
+
+  const { data: reqRow, error: rErr } = await req.sb.from('requirements')
+    .select('id, community_id').eq('id', requirementId).maybeSingle();
+  if (rErr)    return handleErr(res, rErr);
+  if (!reqRow) return res.status(404).json({ error: 'requirement not found' });
+
+  const { data: a, error: aErr } = await req.sb.from('authors')
+    .select('id').eq('profile_id', req.user.id).maybeSingle();
+  if (aErr) return handleErr(res, aErr);
+  if (!a)   return res.status(403).json({ error: 'no linked author' });
+
+  const id = 'pln' + Date.now().toString(36);
+  const { data, error } = await req.sb.from('plans')
+    .insert({ id, requirement_id: requirementId, community_id: reqRow.community_id, author_id: a.id, tier, title, subtitle, cost_label: cost, payback_label: payback, panels, inverter, used_by: 0, featured: false, sort_order: 1000 })
+    .select('*, authors(*)').single();
+  if (error) return handleErr(res, error);
+  res.status(201).json(planOut(data));
+});
+
+app.post('/api/polls', requireAuth, async (req, res) => {
+  const requirementId = (req.body?.requirementId || '').toString();
+  const question = (req.body?.question || '').toString().trim().slice(0, 140);
+  const rawOptions = Array.isArray(req.body?.options) ? req.body.options : [];
+  const options = rawOptions.map(o => (o || '').toString().trim().slice(0, 60)).filter(Boolean);
+  if (question.length < 4) return res.status(400).json({ error: 'question (4+ chars) required' });
+  if (options.length < 2)  return res.status(400).json({ error: 'at least 2 options required' });
+  if (options.length > 6)  return res.status(400).json({ error: 'at most 6 options' });
+  if (!requirementId)      return res.status(400).json({ error: 'requirementId required' });
+
+  const { data: reqRow, error: rErr } = await req.sb.from('requirements')
+    .select('id, community_id').eq('id', requirementId).maybeSingle();
+  if (rErr)    return handleErr(res, rErr);
+  if (!reqRow) return res.status(404).json({ error: 'requirement not found' });
+
+  const id = 'pol' + Date.now().toString(36);
+  const { error: pErr } = await req.sb.from('polls')
+    .insert({ id, requirement_id: requirementId, community_id: reqRow.community_id, question });
+  if (pErr) return handleErr(res, pErr);
+
+  const optionRows = options.map((label, idx) => ({ poll_id: id, idx, label, votes: 0 }));
+  const { error: oErr } = await req.sb.from('poll_options').insert(optionRows);
+  if (oErr) return handleErr(res, oErr);
+
+  res.status(201).json({ id, q: question, total: 0, options: options.map(label => ({ label, votes: 0 })) });
+});
+
+app.post('/api/resources', requireAuth, async (req, res) => {
+  const requirementId = (req.body?.requirementId || '').toString();
+  const title = (req.body?.title || '').toString().trim().slice(0, 120);
+  const type = (req.body?.type || '').toString().trim().slice(0, 16) || null;
+  const size = (req.body?.size || '').toString().trim().slice(0, 24) || null;
+  if (title.length < 3) return res.status(400).json({ error: 'title (3+ chars) required' });
+  if (!requirementId)   return res.status(400).json({ error: 'requirementId required' });
+
+  const { data: reqRow, error: rErr } = await req.sb.from('requirements')
+    .select('id, community_id').eq('id', requirementId).maybeSingle();
+  if (rErr)    return handleErr(res, rErr);
+  if (!reqRow) return res.status(404).json({ error: 'requirement not found' });
+
+  const { data: a, error: aErr } = await req.sb.from('authors')
+    .select('id').eq('profile_id', req.user.id).maybeSingle();
+  if (aErr) return handleErr(res, aErr);
+  if (!a)   return res.status(403).json({ error: 'no linked author' });
+
+  const id = 'res' + Date.now().toString(36);
+  const { data, error } = await req.sb.from('resources')
+    .insert({ id, requirement_id: requirementId, community_id: reqRow.community_id, author_id: a.id, title, type, size_label: size })
+    .select('*, authors(*)').single();
+  if (error) return handleErr(res, error);
+  res.status(201).json(resourceOut(data));
+});
+
+app.post('/api/vendors', requireAuth, async (req, res) => {
+  const requirementId = (req.body?.requirementId || '').toString();
+  const name = (req.body?.name || '').toString().trim().slice(0, 80);
+  const price = (req.body?.price || '').toString().trim().slice(0, 40) || null;
+  const tag = (req.body?.tag || '').toString().trim().slice(0, 40) || null;
+  if (name.length < 2) return res.status(400).json({ error: 'name (2+ chars) required' });
+  if (!requirementId)  return res.status(400).json({ error: 'requirementId required' });
+
+  const { data: reqRow, error: rErr } = await req.sb.from('requirements')
+    .select('id, community_id').eq('id', requirementId).maybeSingle();
+  if (rErr)    return handleErr(res, rErr);
+  if (!reqRow) return res.status(404).json({ error: 'requirement not found' });
+
+  const initials = (name.split(/\s+/).map(w => w[0]).join('') || name.slice(0, 2)).slice(0, 2).toUpperCase();
+  const palette = ['#6E8FB5', '#E0A458', '#7BAE7F', '#C97B84', '#8A7BB5', '#5BA3A0'];
+  const color = palette[name.length % palette.length];
+
+  const id = 'ven' + Date.now().toString(36);
+  const { data, error } = await req.sb.from('vendors')
+    .insert({ id, requirement_id: requirementId, community_id: reqRow.community_id, name, price_label: price, tag, logo: initials, color, verified: false, jobs: 0 })
+    .select('*').single();
+  if (error) return handleErr(res, error);
+  res.status(201).json(vendorOut(data));
 });
 
 app.post('/api/polls/:id/vote', requireAuth, async (req, res) => {

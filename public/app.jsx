@@ -660,18 +660,303 @@ function HomeScreen({ ctx }) {
   );
 }
 
+// ─── Compose a new discussion thread ────────────────────────
+function ComposeThread({ open, onClose, reqId, onPosted, isDesktop }) {
+  const [title, setTitle] = useState('');
+  const [tag, setTag] = useState('Question');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const tags = ['Question', 'Guide', 'Data', 'Resource'];
+
+  useEffect(() => { if (open) { setTitle(''); setTag('Question'); setErr(null); } }, [open]);
+
+  const submit = async () => {
+    const t = title.trim();
+    if (t.length < 4) { setErr('Give your thread a title (4+ chars).'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.post('/threads', { requirementId: reqId, title: t, tag });
+      onPosted?.();
+      onClose();
+    } catch (e) {
+      setErr(e.message || 'Could not post. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Start a thread" isDesktop={isDesktop}>
+      <p className="sheet-blurb">Ask a question or share what you learned — neighbours planning the same thing will see it.</p>
+
+      <label className="form-label">Title</label>
+      <input
+        className="form-input"
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        placeholder="e.g. Which inverter handled the May outages?"
+        autoFocus
+        maxLength={140}
+      />
+
+      <label className="form-label" style={{ marginTop: 16 }}>Type</label>
+      <div className="cat-pick-grid">
+        {tags.map(tg => (
+          <button
+            key={tg}
+            type="button"
+            onClick={() => setTag(tg)}
+            className={`cat-pick ${tag === tg ? 'is-active' : ''}`}>
+            {tg}
+          </button>
+        ))}
+      </div>
+
+      {err && <div className="form-err">{err}</div>}
+
+      <button className="btn btn-primary btn-full" disabled={busy} onClick={submit}>
+        {busy ? 'Posting…' : 'Post thread'} {!busy && <Icon name="arrowRight" size={14} />}
+      </button>
+    </BottomSheet>
+  );
+}
+
+// ─── Compose a community plan ───────────────────────────────
+function ComposePlan({ open, onClose, reqId, onPosted, isDesktop }) {
+  const [f, setF] = useState({ title: '', tier: 'Family', subtitle: '', cost: '', payback: '', panels: '', inverter: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const tiers = ['Budget', 'Family', 'Premium'];
+  const set = (k, v) => setF(s => ({ ...s, [k]: v }));
+
+  useEffect(() => { if (open) { setF({ title: '', tier: 'Family', subtitle: '', cost: '', payback: '', panels: '', inverter: '' }); setErr(null); } }, [open]);
+
+  const submit = async () => {
+    if (f.title.trim().length < 3) { setErr('Give the plan a name (3+ chars).'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.post('/plans', { requirementId: reqId, ...f, title: f.title.trim() });
+      onPosted?.(); onClose();
+    } catch (e) { setErr(e.message || 'Could not add. Try again.'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Add a plan" isDesktop={isDesktop}>
+      <p className="sheet-blurb">Share an option neighbours can compare — what's included, the price range, and a couple of key details.</p>
+
+      <label className="form-label">Plan name</label>
+      <input className="form-input" value={f.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Standard package" autoFocus maxLength={80} />
+
+      <label className="form-label" style={{ marginTop: 16 }}>Tier</label>
+      <div className="cat-pick-grid">
+        {tiers.map(t => (
+          <button key={t} type="button" onClick={() => set('tier', t)} className={`cat-pick ${f.tier === t ? 'is-active' : ''}`}>{t}</button>
+        ))}
+      </div>
+
+      <label className="form-label" style={{ marginTop: 16 }}>What it covers</label>
+      <input className="form-input" value={f.subtitle} onChange={e => set('subtitle', e.target.value)} placeholder="e.g. what's included in this option" maxLength={120} />
+
+      <div className="flex gap-3" style={{ marginTop: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label className="form-label">Cost range</label>
+          <input className="form-input" value={f.cost} onChange={e => set('cost', e.target.value)} placeholder="e.g. ₹2L – ₹3L" maxLength={40} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label className="form-label">Payback / ROI <span className="muted">(optional)</span></label>
+          <input className="form-input" value={f.payback} onChange={e => set('payback', e.target.value)} placeholder="e.g. 4 yrs — if relevant" maxLength={40} />
+        </div>
+      </div>
+
+      <div className="flex gap-3" style={{ marginTop: 12 }}>
+        <div style={{ flex: 1 }}>
+          <label className="form-label">Key detail <span className="muted">(optional)</span></label>
+          <input className="form-input" value={f.panels} onChange={e => set('panels', e.target.value)} placeholder="e.g. size, capacity, materials" maxLength={60} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label className="form-label">Brand / model <span className="muted">(optional)</span></label>
+          <input className="form-input" value={f.inverter} onChange={e => set('inverter', e.target.value)} placeholder="e.g. brand or supplier" maxLength={60} />
+        </div>
+      </div>
+
+      {err && <div className="form-err">{err}</div>}
+      <button className="btn btn-primary btn-full" disabled={busy} onClick={submit}>
+        {busy ? 'Adding…' : 'Add plan'} {!busy && <Icon name="arrowRight" size={14} />}
+      </button>
+    </BottomSheet>
+  );
+}
+
+// ─── Compose a poll ─────────────────────────────────────────
+function ComposePoll({ open, onClose, reqId, onPosted, isDesktop }) {
+  const [question, setQuestion] = useState('');
+  const [options, setOptions] = useState(['', '']);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => { if (open) { setQuestion(''); setOptions(['', '']); setErr(null); } }, [open]);
+
+  const setOpt = (i, v) => setOptions(o => o.map((x, j) => (j === i ? v : x)));
+  const addOpt = () => setOptions(o => (o.length < 6 ? [...o, ''] : o));
+  const removeOpt = (i) => setOptions(o => (o.length > 2 ? o.filter((_, j) => j !== i) : o));
+
+  const submit = async () => {
+    const opts = options.map(o => o.trim()).filter(Boolean);
+    if (question.trim().length < 4) { setErr('Write a question (4+ chars).'); return; }
+    if (opts.length < 2) { setErr('Add at least 2 options.'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.post('/polls', { requirementId: reqId, question: question.trim(), options: opts });
+      onPosted?.(); onClose();
+    } catch (e) { setErr(e.message || 'Could not create. Try again.'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Create a poll" isDesktop={isDesktop}>
+      <p className="sheet-blurb">Get a quick read from neighbours — pick a question and 2–6 options.</p>
+
+      <label className="form-label">Question</label>
+      <input className="form-input" value={question} onChange={e => setQuestion(e.target.value)} placeholder="e.g. Which inverter brand for the group buy?" autoFocus maxLength={140} />
+
+      <label className="form-label" style={{ marginTop: 16 }}>Options</label>
+      {options.map((o, i) => (
+        <div key={i} className="flex gap-2 center" style={{ marginBottom: 8 }}>
+          <input className="form-input" style={{ flex: 1 }} value={o} onChange={e => setOpt(i, e.target.value)} placeholder={`Option ${i + 1}`} maxLength={60} />
+          {options.length > 2 && (
+            <button type="button" className="btn btn-ghost" style={{ padding: '8px 11px' }} onClick={() => removeOpt(i)} aria-label="Remove option">
+              <Icon name="close" size={14} />
+            </button>
+          )}
+        </div>
+      ))}
+      {options.length < 6 && (
+        <button type="button" className="btn btn-ghost" style={{ padding: '6px 10px' }} onClick={addOpt}>
+          <Icon name="plus" size={14} /> Add option
+        </button>
+      )}
+
+      {err && <div className="form-err">{err}</div>}
+      <button className="btn btn-primary btn-full" disabled={busy} onClick={submit}>
+        {busy ? 'Creating…' : 'Create poll'} {!busy && <Icon name="arrowRight" size={14} />}
+      </button>
+    </BottomSheet>
+  );
+}
+
+// ─── Share a resource ───────────────────────────────────────
+function ComposeResource({ open, onClose, reqId, onPosted, isDesktop }) {
+  const [title, setTitle] = useState('');
+  const [type, setType] = useState('PDF');
+  const [size, setSize] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const types = ['PDF', 'Sheet', 'Doc', 'Link'];
+
+  useEffect(() => { if (open) { setTitle(''); setType('PDF'); setSize(''); setErr(null); } }, [open]);
+
+  const submit = async () => {
+    if (title.trim().length < 3) { setErr('Give the resource a title (3+ chars).'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.post('/resources', { requirementId: reqId, title: title.trim(), type, size: size.trim() });
+      onPosted?.(); onClose();
+    } catch (e) { setErr(e.message || 'Could not share. Try again.'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Share a resource" isDesktop={isDesktop}>
+      <p className="sheet-blurb">Point neighbours to a quote, spec sheet, or doc that helped you decide.</p>
+
+      <label className="form-label">Title</label>
+      <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Sunkalp quotation (5kW, hybrid)" autoFocus maxLength={120} />
+
+      <label className="form-label" style={{ marginTop: 16 }}>Type</label>
+      <div className="cat-pick-grid">
+        {types.map(t => (
+          <button key={t} type="button" onClick={() => setType(t)} className={`cat-pick ${type === t ? 'is-active' : ''}`}>{t}</button>
+        ))}
+      </div>
+
+      <label className="form-label" style={{ marginTop: 16 }}>Size <span className="muted">(optional)</span></label>
+      <input className="form-input" value={size} onChange={e => setSize(e.target.value)} placeholder="e.g. 210 KB" maxLength={24} />
+
+      {err && <div className="form-err">{err}</div>}
+      <button className="btn btn-primary btn-full" disabled={busy} onClick={submit}>
+        {busy ? 'Sharing…' : 'Share resource'} {!busy && <Icon name="arrowRight" size={14} />}
+      </button>
+    </BottomSheet>
+  );
+}
+
+// ─── Add a vendor ───────────────────────────────────────────
+function ComposeVendor({ open, onClose, reqId, onPosted, isDesktop }) {
+  const [f, setF] = useState({ name: '', price: '', tag: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const set = (k, v) => setF(s => ({ ...s, [k]: v }));
+
+  useEffect(() => { if (open) { setF({ name: '', price: '', tag: '' }); setErr(null); } }, [open]);
+
+  const submit = async () => {
+    if (f.name.trim().length < 2) { setErr('Enter the vendor name.'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.post('/vendors', { requirementId: reqId, name: f.name.trim(), price: f.price.trim(), tag: f.tag.trim() });
+      onPosted?.(); onClose();
+    } catch (e) { setErr(e.message || 'Could not add. Try again.'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Add a vendor" isDesktop={isDesktop}>
+      <p className="sheet-blurb">Add a vendor you've worked with so neighbours can find and review them.</p>
+
+      <label className="form-label">Vendor name</label>
+      <input className="form-input" value={f.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sunkalp Energy" autoFocus maxLength={80} />
+
+      <label className="form-label" style={{ marginTop: 16 }}>Price guide <span className="muted">(optional)</span></label>
+      <input className="form-input" value={f.price} onChange={e => set('price', e.target.value)} placeholder="e.g. ₹52K/kW" maxLength={40} />
+
+      <label className="form-label" style={{ marginTop: 16 }}>Category / tag <span className="muted">(optional)</span></label>
+      <input className="form-input" value={f.tag} onChange={e => set('tag', e.target.value)} placeholder="e.g. Premium installer" maxLength={40} />
+
+      <div className="sheet-hint">
+        <Icon name="sparkles" size={16} color="#7B5A0E" style={{ marginTop: 2, flex: 'none' }} />
+        <span>New vendors start unverified with no ratings — neighbours build their score by reviewing.</span>
+      </div>
+
+      {err && <div className="form-err">{err}</div>}
+      <button className="btn btn-primary btn-full" disabled={busy} onClick={submit}>
+        {busy ? 'Adding…' : 'Add vendor'} {!busy && <Icon name="arrowRight" size={14} />}
+      </button>
+    </BottomSheet>
+  );
+}
+
 // ─── Requirement detail ─────────────────────────────────────
 function RequirementScreen({ ctx, reqId }) {
   const { me, navigate, goBack, showToast, isDesktop, refreshMe } = ctx;
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [trackBusy, setTrackBusy] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
+  const [resourceOpen, setResourceOpen] = useState(false);
+  const [vendorOpen, setVendorOpen] = useState(false);
 
   const isTracking = (me.activeReqs || []).some(r => r.id === reqId);
 
+  const load = useCallback(
+    () => api.get(`/requirements/${reqId}`).then(setData).catch(e => setErr(e.message)),
+    [reqId]
+  );
+
   useEffect(() => {
     setData(null); setErr(null);
-    const load = () => api.get(`/requirements/${reqId}`).then(setData).catch(e => setErr(e.message));
     load();
 
     let timer;
@@ -757,22 +1042,35 @@ function RequirementScreen({ ctx, reqId }) {
                       <div style={{ flex: 1 }}>
                         <div className="plan-tier">{p.tier}{p.featured ? ' · Featured' : ''}</div>
                         <div className="text-display font-semibold mt-2" style={{ fontSize: 16 }}>{p.title}</div>
-                        <div className="text-sm muted mt-2">{p.subtitle}</div>
-                        <div className="flex gap-3 mt-3 text-xs muted wrap">
-                          <span>{p.panels}</span>
-                          <span>·</span>
-                          <span>{p.inverter}</span>
-                        </div>
+                        {p.subtitle && <div className="text-sm muted mt-2">{p.subtitle}</div>}
+                        {(p.panels || p.inverter) && (
+                          <div className="flex gap-3 mt-3 text-xs muted wrap">
+                            {p.panels && <span>{p.panels}</span>}
+                            {p.panels && p.inverter && <span>·</span>}
+                            {p.inverter && <span>{p.inverter}</span>}
+                          </div>
+                        )}
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div className="price">{p.cost}</div>
-                        <div className="text-xs muted mt-2">{p.payback} payback</div>
+                        {p.cost && <div className="price">{p.cost}</div>}
+                        {p.payback && <div className="text-xs muted mt-2">{p.payback} payback</div>}
                         <div className="chip chip-sage mt-3" style={{ fontSize: 11 }}>
                           {p.usedBy} flats use this
                         </div>
                       </div>
                     </div>
                   ))}
+                  {ws.plans.length === 0 && (
+                    <p className="text-sm muted" style={{ margin: '2px 0 14px' }}>
+                      No plans yet — add the first one neighbours can compare.
+                    </p>
+                  )}
+                  <button
+                    className="btn btn-ghost"
+                    style={{ width: '100%', justifyContent: 'center', marginTop: ws.plans.length ? 12 : 0 }}
+                    onClick={() => setPlanOpen(true)}>
+                    <Icon name="plus" size={15} /> Add a plan
+                  </button>
                 </section>
 
                 <section className="card card-pad">
@@ -783,11 +1081,33 @@ function RequirementScreen({ ctx, reqId }) {
                   {ws.threads.map(t => (
                     <ThreadRow key={t.id} t={t} onLike={() => showToast('Liked')} />
                   ))}
+                  {ws.threads.length === 0 && (
+                    <p className="text-sm muted" style={{ margin: '2px 0 14px' }}>
+                      No threads yet — be the first to start one.
+                    </p>
+                  )}
+                  <button
+                    className="btn btn-ghost"
+                    style={{ width: '100%', justifyContent: 'center', marginTop: ws.threads.length ? 10 : 0 }}
+                    onClick={() => setComposeOpen(true)}>
+                    <Icon name="plus" size={15} /> Start a thread
+                  </button>
                 </section>
 
                 <section>
                   <h3 className="text-display" style={{ margin: '0 0 12px', fontSize: 17 }}>Open polls</h3>
                   {ws.polls.map(p => <Poll key={p.id} poll={p} onVoted={showToast} />)}
+                  {ws.polls.length === 0 && (
+                    <p className="text-sm muted" style={{ margin: '0 0 12px' }}>
+                      No polls yet — ask neighbours what they prefer.
+                    </p>
+                  )}
+                  <button
+                    className="btn btn-ghost"
+                    style={{ width: '100%', justifyContent: 'center' }}
+                    onClick={() => setPollOpen(true)}>
+                    <Icon name="plus" size={15} /> Create a poll
+                  </button>
                 </section>
 
                 <section className="card card-pad">
@@ -800,15 +1120,25 @@ function RequirementScreen({ ctx, reqId }) {
                       <div style={{ flex: 1 }}>
                         <div className="title">{r.title}</div>
                         <div className="meta">
-                          <span>{r.type.toUpperCase()}</span>
-                          <span>·</span>
-                          <span>{r.size}</span>
+                          <span>{(r.type || 'FILE').toUpperCase()}</span>
+                          {r.size && <><span>·</span><span>{r.size}</span></>}
                           <span>·</span>
                           <span>shared by {r.byInfo?.name || r.by}</span>
                         </div>
                       </div>
                     </div>
                   ))}
+                  {ws.resources.length === 0 && (
+                    <p className="text-sm muted" style={{ margin: '2px 0 14px' }}>
+                      No resources yet — share a quote, spec sheet, or doc.
+                    </p>
+                  )}
+                  <button
+                    className="btn btn-ghost"
+                    style={{ width: '100%', justifyContent: 'center', marginTop: ws.resources.length ? 12 : 0 }}
+                    onClick={() => setResourceOpen(true)}>
+                    <Icon name="plus" size={15} /> Share a resource
+                  </button>
                 </section>
               </>
             )}
@@ -837,6 +1167,17 @@ function RequirementScreen({ ctx, reqId }) {
                   <span className="score-badge">{v.score}</span>
                 </button>
               ))}
+              {data.vendors.length === 0 && (
+                <p className="text-sm muted" style={{ margin: '2px 0 12px' }}>
+                  No vendors yet — add one you've worked with.
+                </p>
+              )}
+              <button
+                className="btn btn-ghost"
+                style={{ width: '100%', justifyContent: 'center', marginTop: data.vendors.length ? 10 : 0 }}
+                onClick={() => setVendorOpen(true)}>
+                <Icon name="plus" size={15} /> Add a vendor
+              </button>
             </section>
 
             <section className="card card-pad">
@@ -861,6 +1202,42 @@ function RequirementScreen({ ctx, reqId }) {
           </aside>
         </div>
       </div>
+
+      <ComposeThread
+        open={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        reqId={reqId}
+        isDesktop={isDesktop}
+        onPosted={() => { showToast('Thread posted'); load(); }}
+      />
+      <ComposePlan
+        open={planOpen}
+        onClose={() => setPlanOpen(false)}
+        reqId={reqId}
+        isDesktop={isDesktop}
+        onPosted={() => { showToast('Plan added'); load(); }}
+      />
+      <ComposePoll
+        open={pollOpen}
+        onClose={() => setPollOpen(false)}
+        reqId={reqId}
+        isDesktop={isDesktop}
+        onPosted={() => { showToast('Poll created'); load(); }}
+      />
+      <ComposeResource
+        open={resourceOpen}
+        onClose={() => setResourceOpen(false)}
+        reqId={reqId}
+        isDesktop={isDesktop}
+        onPosted={() => { showToast('Resource shared'); load(); }}
+      />
+      <ComposeVendor
+        open={vendorOpen}
+        onClose={() => setVendorOpen(false)}
+        reqId={reqId}
+        isDesktop={isDesktop}
+        onPosted={() => { showToast('Vendor added'); load(); }}
+      />
     </div>
   );
 }
