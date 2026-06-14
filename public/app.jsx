@@ -1830,7 +1830,94 @@ function BackBar({ onBack, title, subtitle }) {
 }
 
 // ─── Login screen (email magic-link or phone OTP) ──────────
-function LoginScreen() {
+// ─── Landing: marketing page shown before sign-in ───────────
+function LandingScreen({ onGetStarted }) {
+  const features = [
+    { icon: 'clipboard', tint: 'sun', title: 'Real requirements',
+      body: 'Track what your block is actually buying — from soundproof windows to 5kW solar — with live budgets and quotes.' },
+    { icon: 'store', tint: 'sage', title: 'Vendors you can trust',
+      body: 'Ratings, recent jobs in your own building, and honest price ranges from neighbours who already hired them.' },
+    { icon: 'users', tint: 'terra', title: 'Group-buys that cut the price',
+      body: 'Pool demand with neighbours and unlock bulk pricing no single flat could get on its own.' },
+  ];
+  const steps = [
+    { n: '1', title: 'Join your community', body: 'Find your apartment or society and set up your profile in seconds.' },
+    { n: '2', title: 'Explore real plans', body: 'Browse battle-tested plans, vendors, and live discussions from neighbours.' },
+    { n: '3', title: 'Decide together', body: 'Shortlist, compare quotes, and join group-buys with the community behind you.' },
+  ];
+
+  return (
+    <div className="landing">
+      <header className="landing-nav">
+        <div className="landing-brand text-display">CollabBuy</div>
+        <button className="btn btn-ghost btn-sm" onClick={onGetStarted}>Sign in</button>
+      </header>
+
+      <section className="landing-hero">
+        <div className="sun-blob" />
+        <div className="sun-emoji">☀</div>
+        <span className="landing-eyebrow">Community knowledge for home decisions</span>
+        <h1>Big home upgrades,<br /><em>decided together.</em></h1>
+        <p>Your neighbours already solved solar, EV chargers, and interiors. See their real quotes, trusted vendors, and open group-buys — then make your call with the whole community behind you.</p>
+        <div className="landing-cta">
+          <button className="btn btn-accent" onClick={onGetStarted}>Get started <Icon name="arrowRight" size={15} /></button>
+          <button className="btn btn-ghost" onClick={onGetStarted}>I have an account</button>
+        </div>
+      </section>
+
+      <div className="landing-stats">
+        <div><strong>47</strong><span>flats planning solar</span></div>
+        <div><strong>₹2.8L</strong><span>avg solar cost</span></div>
+        <div><strong>&lt; 4 hr</strong><span>vendor response</span></div>
+      </div>
+
+      <section className="landing-section">
+        <h2 className="text-display">Why neighbours use CollabBuy</h2>
+        <div className="landing-features">
+          {features.map(f => (
+            <div key={f.title} className="card card-pad landing-feature">
+              <div className={`landing-feature-icon tint-${f.tint}`}><Icon name={f.icon} size={22} /></div>
+              <div className="landing-feature-title text-display">{f.title}</div>
+              <div className="text-sm muted">{f.body}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-section">
+        <h2 className="text-display">How it works</h2>
+        <div className="landing-steps">
+          {steps.map(s => (
+            <div key={s.n} className="landing-step">
+              <div className="landing-step-n text-display">{s.n}</div>
+              <div>
+                <div className="landing-step-title text-display">{s.title}</div>
+                <div className="text-sm muted">{s.body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-section">
+        <div className="landing-trust card card-pad">
+          <Icon name="shield" size={20} color="var(--cb-primary)" />
+          <div className="text-sm">Private to your community. Your data stays with verified neighbours — <strong>never sold</strong>.</div>
+        </div>
+      </section>
+
+      <section className="landing-final">
+        <div className="sun-blob" />
+        <h2 className="text-display">Ready to decide with your neighbours?</h2>
+        <button className="btn btn-accent" onClick={onGetStarted}>Get started <Icon name="arrowRight" size={15} /></button>
+      </section>
+
+      <footer className="landing-foot muted text-xs">© CollabBuy · Community group-buying for home decisions</footer>
+    </div>
+  );
+}
+
+function LoginScreen({ onBack }) {
   const [mode, setMode]     = useState('email');   // 'email' | 'phone'
   const [email, setEmail]   = useState('');
   const [phone, setPhone]   = useState('');
@@ -1880,13 +1967,33 @@ function LoginScreen() {
 
   const reset = () => { setStep('input'); setStatus('idle'); setErr(''); setCode(''); };
 
-  const inputStyle = { padding: 12, borderRadius: 12, border: '1px solid var(--cb-border)', font: 'inherit' };
-
   return (
-    <div className="boot" style={{ padding: 24 }}>
-      <div className="card card-pad" style={{ maxWidth: 400, width: '100%' }}>
-        <div className="text-display font-bold" style={{ fontSize: 22 }}>CollabBuy</div>
-        <div className="text-sm muted mt-2">Sign in to your community workspace.</div>
+    <div className="auth">
+      <aside className="auth-brand">
+        <div className="sun-blob" />
+        <div className="sun-emoji">☀</div>
+        {onBack && (
+          <button type="button" className="auth-back" onClick={onBack}>
+            <Icon name="arrowLeft" size={14} /> Back
+          </button>
+        )}
+        <div className="auth-brand-inner">
+          <div className="auth-logo text-display">CollabBuy</div>
+          <h2 className="text-display">Decide big home upgrades with your neighbours.</h2>
+          <ul className="auth-points">
+            <li><Icon name="check" size={16} /> Real quotes &amp; community-trusted vendors</li>
+            <li><Icon name="check" size={16} /> Open group-buys that cut the price</li>
+            <li><Icon name="check" size={16} /> Private to your community — never sold</li>
+          </ul>
+        </div>
+      </aside>
+
+      <main className="auth-form-wrap">
+        <div className="auth-form">
+        <div className="auth-form-head">
+          <div className="text-display font-bold" style={{ fontSize: 24 }}>Welcome back</div>
+          <div className="text-sm muted mt-2">Sign in to your community workspace.</div>
+        </div>
 
         {step === 'input' && (
           <>
@@ -1901,8 +2008,8 @@ function LoginScreen() {
 
             {mode === 'email' && (
               <form onSubmit={sendEmail} className="mt-4" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <input type="email" required autoFocus value={email}
-                  onChange={e => setEmail(e.target.value)} placeholder="you@example.com" style={inputStyle} />
+                <input type="email" required autoFocus value={email} className="auth-input"
+                  onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
                 <button className="btn btn-primary" disabled={status === 'busy'}>
                   {status === 'busy' ? 'Sending…' : 'Send magic link'}
                 </button>
@@ -1911,8 +2018,8 @@ function LoginScreen() {
 
             {mode === 'phone' && (
               <form onSubmit={sendSms} className="mt-4" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <input type="tel" required autoFocus value={phone} inputMode="tel"
-                  onChange={e => setPhone(e.target.value)} placeholder="+91 9876543210" style={inputStyle} />
+                <input type="tel" required autoFocus value={phone} inputMode="tel" className="auth-input"
+                  onChange={e => setPhone(e.target.value)} placeholder="+91 9876543210" />
                 <div className="text-xs muted">Include your country code.</div>
                 <button className="btn btn-primary" disabled={status === 'busy'}>
                   {status === 'busy' ? 'Sending…' : 'Send code'}
@@ -1932,9 +2039,9 @@ function LoginScreen() {
         {step === 'otp' && (
           <form onSubmit={verifySms} className="mt-4" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="text-sm">Enter the 6-digit code sent to <strong>{normalisePhone(phone)}</strong>.</div>
-            <input type="text" required autoFocus value={code} inputMode="numeric" maxLength={6}
+            <input type="text" required autoFocus value={code} inputMode="numeric" maxLength={6} className="auth-input"
               onChange={e => setCode(e.target.value.replace(/\D/g, ''))} placeholder="123456"
-              style={{ ...inputStyle, letterSpacing: '0.4em', textAlign: 'center', fontSize: 18 }} />
+              style={{ letterSpacing: '0.4em', textAlign: 'center', fontSize: 18 }} />
             <button className="btn btn-primary" disabled={status === 'busy' || code.length < 6}>
               {status === 'busy' ? 'Verifying…' : 'Verify'}
             </button>
@@ -1943,7 +2050,8 @@ function LoginScreen() {
         )}
 
         {err && <div className="text-xs mt-3" style={{ color: '#A6586A' }}>{err}</div>}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
@@ -1952,6 +2060,7 @@ function LoginScreen() {
 function Root() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showAuth, setShowAuth] = useState(false);
 
   useEffect(() => {
     sb.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false); });
@@ -1960,7 +2069,10 @@ function Root() {
   }, []);
 
   if (loading) return null;
-  return session ? <App /> : <LoginScreen />;
+  if (session) return <App />;
+  return showAuth
+    ? <LoginScreen onBack={() => setShowAuth(false)} />
+    : <LandingScreen onGetStarted={() => setShowAuth(true)} />;
 }
 
 // ─── Error boundary: a render error shows a recoverable message, not a blank screen ─
