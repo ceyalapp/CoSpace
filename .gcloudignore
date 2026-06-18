@@ -1,0 +1,16 @@
+# Keep the Cloud Build upload lean and free of secrets.
+.git
+.gitignore
+.gcloudignore
+node_modules
+public/app.bundle.js
+public/app.bundle.js.map
+npm-debug.log
+*.log
+.env
+.env.local
+.env.*.local
+.claude
+.DS_Store
+README.md
+data/state.json

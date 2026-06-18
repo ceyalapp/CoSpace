@@ -130,12 +130,15 @@ function reviewOut(r) {
   };
 }
 
-function planOut(p) {
+function planOut(p, adoptedSet) {
   return {
     id: p.id, cat: p.requirement_id, tier: p.tier, title: p.title, subtitle: p.subtitle,
     cost: p.cost_label, payback: p.payback_label, usedBy: p.used_by,
     author: p.author_id, panels: p.panels, inverter: p.inverter, warranty: p.warranty,
     featured: p.featured, authorInfo: authorInfo(p.authors),
+    vendorId: p.vendor_id || null,
+    vendorInfo: p.vendors ? { id: p.vendors.id, name: p.vendors.name, logo: p.vendors.logo, color: p.vendors.color } : null,
+    adopted: adoptedSet instanceof Set ? adoptedSet.has(p.id) : false,
   };
 }
 
@@ -266,18 +269,19 @@ app.get('/api/me', requireAuth, async (req, res) => {
         avatar: p?.avatar, avatarColor: p?.avatar_color,
         community: null, communityShort: null, members: 0,
         needsOnboarding: true,
-        activeReqs: [], shortlistVendors: [], quotations: [],
+        activeReqs: [], shortlistVendors: [], quotations: [], wishlist: [],
         budget: { planned: 0, spent: 0, items: [] },
       });
     }
 
-    const [community, activeReqs, shortlist, quotations, budget, budgetItems] = await Promise.all([
+    const [community, activeReqs, shortlist, quotations, budget, budgetItems, wishlist] = await Promise.all([
       req.sb.from('communities').select('*').eq('id', communityId).maybeSingle(),
       req.sb.from('active_requirements').select('*, requirements(*)').eq('user_id', req.user.id),
       req.sb.from('shortlist').select('vendor_id, vendors(*)').eq('user_id', req.user.id),
       req.sb.from('quotations').select('*').eq('user_id', req.user.id).order('id'),
       req.sb.from('budgets_v').select('*').eq('user_id', req.user.id).maybeSingle(),
       req.sb.from('budget_items').select('*').eq('user_id', req.user.id).order('sort_order'),
+      req.sb.from('wishlist_items').select('requirement_id').eq('user_id', req.user.id),
     ]);
 
     const c = community.data;
@@ -299,6 +303,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
         meta: r.requirements ? reqOut(r.requirements) : null,
       })),
       shortlistVendors: (shortlist.data || []).map(s => s.vendors ? vendorOut(s.vendors) : null).filter(Boolean),
+      wishlist: (wishlist.data || []).map(w => w.requirement_id),
       quotations: (quotations.data || []).map(q => ({
         vendor: q.vendor_label, amount: q.amount_label, date: q.date_label, best: q.best,
       })),
@@ -508,6 +513,56 @@ app.delete('/api/me/active-requirements/:id', requireAuth, async (req, res) => {
   res.status(204).end();
 });
 
+// ─── Wishlist: per-user reorderable list of saved requirements ──
+// GET — saved requirements in the member's chosen order.
+app.get('/api/me/wishlist', requireAuth, async (req, res) => {
+  const { data, error } = await req.sb.from('wishlist_items')
+    .select('requirement_id, position, requirements(*)')
+    .eq('user_id', req.user.id)
+    .order('position', { ascending: true }).order('created_at', { ascending: true });
+  if (error) return handleErr(res, error);
+  res.json((data || []).map(w => w.requirements ? reqOut(w.requirements) : null).filter(Boolean));
+});
+
+// PATCH /order — persist a new order (registered before /:id to keep paths explicit).
+app.patch('/api/me/wishlist/order', requireAuth, async (req, res) => {
+  const order = Array.isArray(req.body?.order) ? req.body.order.map(String) : null;
+  if (!order) return res.status(400).json({ error: 'order array required' });
+  const rows = order.map((rid, i) => ({ user_id: req.user.id, requirement_id: rid, position: i }));
+  const { error } = await req.sb.from('wishlist_items')
+    .upsert(rows, { onConflict: 'user_id,requirement_id' }); // updates position only; created_at preserved
+  if (error) return handleErr(res, error);
+  res.status(204).end();
+});
+
+// POST /:id — add a requirement to the end of the wishlist (idempotent).
+app.post('/api/me/wishlist/:id', requireAuth, async (req, res) => {
+  const { data: reqRow, error: rErr } = await req.sb.from('requirements')
+    .select('id').eq('id', req.params.id).maybeSingle();
+  if (rErr) return handleErr(res, rErr);
+  if (!reqRow) return res.status(404).json({ error: 'requirement not found' });
+
+  const { data: last } = await req.sb.from('wishlist_items')
+    .select('position').eq('user_id', req.user.id)
+    .order('position', { ascending: false }).limit(1).maybeSingle();
+  const position = (last?.position ?? -1) + 1;
+
+  const { data, error } = await req.sb.from('wishlist_items')
+    .upsert({ user_id: req.user.id, requirement_id: req.params.id, position }, { onConflict: 'user_id,requirement_id' })
+    .select('requirement_id, requirements(*)').single();
+  if (error) return handleErr(res, error);
+  res.status(201).json(data.requirements ? reqOut(data.requirements) : { id: data.requirement_id });
+});
+
+// DELETE /:id — remove from the wishlist.
+app.delete('/api/me/wishlist/:id', requireAuth, async (req, res) => {
+  const { error, count } = await req.sb.from('wishlist_items')
+    .delete({ count: 'exact' }).eq('user_id', req.user.id).eq('requirement_id', req.params.id);
+  if (error) return handleErr(res, error);
+  if (!count) return res.status(404).json({ error: 'not in wishlist' });
+  res.status(204).end();
+});
+
 // Short relative-time label from a timestamp ("just now", "2h", "3d", "2w").
 function relTime(ts) {
   const diff = Date.now() - new Date(ts).getTime();
@@ -547,7 +602,7 @@ app.get('/api/requirements/:id', requireAuth, async (req, res) => {
   const [reqRow, summary, plans, threads, polls, options, gb, resources, vendors] = await Promise.all([
     req.sb.from('requirements').select('*').eq('id', id).maybeSingle(),
     req.sb.from('workspace_summary_v').select('*').eq('requirement_id', id).maybeSingle(),
-    req.sb.from('plans').select('*, authors(*)').eq('requirement_id', id).order('sort_order'),
+    req.sb.from('plans').select('*, authors(*), vendors(id, name, logo, color)').eq('requirement_id', id).order('sort_order'),
     req.sb.from('threads').select('*, authors(*)').eq('requirement_id', id).order('pinned', { ascending: false }).order('created_at', { ascending: false }),
     req.sb.from('polls_v').select('*').eq('requirement_id', id),
     req.sb.from('poll_options').select('*').order('poll_id').order('idx'),
@@ -561,6 +616,15 @@ app.get('/api/requirements/:id', requireAuth, async (req, res) => {
 
   const r = reqRow.data;
   const s = summary.data;
+
+  // Which of these plans the caller is already using (RLS limits the rows to their own).
+  const planIds = (plans.data || []).map(p => p.id);
+  let adoptedSet = new Set();
+  if (planIds.length) {
+    const { data: adopts } = await req.sb.from('plan_adopters').select('plan_id').in('plan_id', planIds);
+    adoptedSet = new Set((adopts || []).map(a => a.plan_id));
+  }
+
   const pollOptionsByPoll = {};
   for (const o of (options.data || [])) {
     (pollOptionsByPoll[o.poll_id] ||= []).push(o);
@@ -577,7 +641,7 @@ app.get('/api/requirements/:id', requireAuth, async (req, res) => {
       activePolls:     s?.active_polls     || 0,
       activeGroupBuy:  !!s?.active_group_buy,
     },
-    plans:     (plans.data || []).map(planOut),
+    plans:     (plans.data || []).map(p => planOut(p, adoptedSet)),
     threads:   (threads.data || []).map(threadOut),
     polls:     myPolls.map(p => pollOut(p, pollOptionsByPoll[p.id])),
     groupBuy:  gb.data ? gbOut(gb.data) : null,
@@ -637,7 +701,7 @@ app.get('/api/plans', requireAuth, async (req, res) => {
   if (req.query.cat) q = q.eq('requirement_id', req.query.cat);
   const { data, error } = await q;
   if (error) return handleErr(res, error);
-  res.json(data.map(planOut));
+  res.json(data.map(p => planOut(p)));
 });
 
 app.get('/api/threads/:id', requireAuth, async (req, res) => {
@@ -693,6 +757,7 @@ app.post('/api/plans', requireAuth, async (req, res) => {
   const payback = (req.body?.payback || '').toString().trim().slice(0, 40) || null;
   const panels = (req.body?.panels || '').toString().trim().slice(0, 60) || null;
   const inverter = (req.body?.inverter || '').toString().trim().slice(0, 60) || null;
+  const vendorId = (req.body?.vendorId || '').toString() || null;
   if (title.length < 3) return res.status(400).json({ error: 'title (3+ chars) required' });
   if (!['Budget', 'Family', 'Premium'].includes(tier)) return res.status(400).json({ error: 'tier must be Budget, Family, or Premium' });
   if (!requirementId) return res.status(400).json({ error: 'requirementId required' });
@@ -702,6 +767,14 @@ app.post('/api/plans', requireAuth, async (req, res) => {
   if (rErr)    return handleErr(res, rErr);
   if (!reqRow) return res.status(404).json({ error: 'requirement not found' });
 
+  // A linked vendor must belong to this requirement.
+  if (vendorId) {
+    const { data: v, error: vErr } = await req.sb.from('vendors')
+      .select('id').eq('id', vendorId).eq('requirement_id', requirementId).maybeSingle();
+    if (vErr) return handleErr(res, vErr);
+    if (!v)   return res.status(400).json({ error: 'vendor not found in this requirement' });
+  }
+
   const { data: a, error: aErr } = await req.sb.from('authors')
     .select('id').eq('profile_id', req.user.id).maybeSingle();
   if (aErr) return handleErr(res, aErr);
@@ -709,10 +782,29 @@ app.post('/api/plans', requireAuth, async (req, res) => {
 
   const id = 'pln' + Date.now().toString(36);
   const { data, error } = await req.sb.from('plans')
-    .insert({ id, requirement_id: requirementId, community_id: reqRow.community_id, author_id: a.id, tier, title, subtitle, cost_label: cost, payback_label: payback, panels, inverter, used_by: 0, featured: false, sort_order: 1000 })
-    .select('*, authors(*)').single();
+    .insert({ id, requirement_id: requirementId, community_id: reqRow.community_id, author_id: a.id, vendor_id: vendorId, tier, title, subtitle, cost_label: cost, payback_label: payback, panels, inverter, used_by: 0, featured: false, sort_order: 1000 })
+    .select('*, authors(*), vendors(id, name, logo, color)').single();
   if (error) return handleErr(res, error);
   res.status(201).json(planOut(data));
+});
+
+app.post('/api/plans/:id/adopt', requireAuth, async (req, res) => {
+  const { data: plan, error: pErr } = await req.sb.from('plans')
+    .select('id').eq('id', req.params.id).maybeSingle();
+  if (pErr)  return handleErr(res, pErr);
+  if (!plan) return res.status(404).json({ error: 'plan not found' });
+
+  const { error } = await req.sb.from('plan_adopters')
+    .insert({ plan_id: req.params.id, user_id: req.user.id });
+  if (error && error.code !== '23505') return handleErr(res, error); // ignore "already using"
+  res.status(201).json({ ok: true, adopted: true });
+});
+
+app.delete('/api/plans/:id/adopt', requireAuth, async (req, res) => {
+  const { error } = await req.sb.from('plan_adopters')
+    .delete().eq('plan_id', req.params.id).eq('user_id', req.user.id);
+  if (error) return handleErr(res, error);
+  res.json({ ok: true, adopted: false });
 });
 
 app.post('/api/polls', requireAuth, async (req, res) => {
@@ -845,7 +937,7 @@ app.get('/api/search', requireAuth, async (req, res) => {
   res.json({
     requirements: (reqs.data || []).map(reqOut),
     vendors:      (vendors.data || []).map(vendorOut),
-    plans:        (plans.data || []).map(planOut),
+    plans:        (plans.data || []).map(p => planOut(p)),
     threads:      (threads.data || []).map(threadOut),
   });
 });
@@ -857,7 +949,7 @@ app.post('/api/admin/reset', async (req, res) => {
   if (!service) return res.status(500).json({ error: 'service role key required for reset' });
   try {
     // Truncate per-user state and reseed via the canonical script.
-    const tables = ['poll_votes','thread_likes','group_buy_members','quotations','budget_items','budgets','shortlist','checklist_items','active_requirements'];
+    const tables = ['poll_votes','thread_likes','group_buy_members','quotations','budget_items','budgets','shortlist','checklist_items','active_requirements','wishlist_items'];
     for (const t of tables) {
       const { error } = await service.from(t).delete().not('user_id', 'is', null);
       if (error) throw error;

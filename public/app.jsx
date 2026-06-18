@@ -273,10 +273,11 @@ function NotificationsSheet({ open, onClose, onOpenReq, onOpenVendor, onRead, is
 
 // ─── Top-level App ───────────────────────────────────────────
 const TABS = [
-  { id: 'home',    label: 'Explore', icon: 'home' },
-  { id: 'vendors', label: 'Vendors', icon: 'store' },
-  { id: 'plans',   label: 'Plans',   icon: 'grid' },
-  { id: 'me',      label: 'Me',      icon: 'user' },
+  { id: 'home',     label: 'Explore',  icon: 'home' },
+  { id: 'vendors',  label: 'Vendors',  icon: 'store' },
+  { id: 'plans',    label: 'Plans',    icon: 'grid' },
+  { id: 'wishlist', label: 'Wishlist', icon: 'star' },
+  { id: 'me',       label: 'Me',       icon: 'user' },
 ];
 
 // ─── Onboarding (new members: pick/create community + profile) ─
@@ -418,10 +419,11 @@ function App() {
     if (route.kind === 'vendor')  return <VendorScreen ctx={ctx} vendorId={route.id} />;
     if (route.kind === 'search')  return <SearchScreen ctx={ctx} />;
     switch (tab) {
-      case 'vendors': return <VendorsScreen ctx={ctx} />;
-      case 'plans':   return <PlansScreen ctx={ctx} />;
-      case 'me':      return <MeScreen ctx={ctx} />;
-      default:        return <HomeScreen ctx={ctx} />;
+      case 'vendors':  return <VendorsScreen ctx={ctx} />;
+      case 'plans':    return <PlansScreen ctx={ctx} />;
+      case 'wishlist': return <WishlistScreen ctx={ctx} />;
+      case 'me':       return <MeScreen ctx={ctx} />;
+      default:         return <HomeScreen ctx={ctx} />;
     }
   })();
 
@@ -722,14 +724,33 @@ function ComposeThread({ open, onClose, reqId, onPosted, isDesktop }) {
 }
 
 // ─── Compose a community plan ───────────────────────────────
-function ComposePlan({ open, onClose, reqId, onPosted, isDesktop }) {
-  const [f, setF] = useState({ title: '', tier: 'Family', subtitle: '', cost: '', payback: '', panels: '', inverter: '' });
+function ComposePlan({ open, onClose, reqId, vendors, onPosted, isDesktop }) {
+  const blank = { title: '', tier: 'Family', subtitle: '', cost: '', payback: '', panels: '', inverter: '', vendorId: '' };
+  const [f, setF] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [extraVendors, setExtraVendors] = useState([]);
+  const [vAdding, setVAdding] = useState(false);
+  const [vName, setVName] = useState('');
+  const [vBusy, setVBusy] = useState(false);
   const tiers = ['Budget', 'Family', 'Premium'];
   const set = (k, v) => setF(s => ({ ...s, [k]: v }));
+  const allVendors = [...(vendors || []), ...extraVendors];
 
-  useEffect(() => { if (open) { setF({ title: '', tier: 'Family', subtitle: '', cost: '', payback: '', panels: '', inverter: '' }); setErr(null); } }, [open]);
+  useEffect(() => { if (open) { setF(blank); setErr(null); setExtraVendors([]); setVAdding(false); setVName(''); } }, [open]);
+
+  const addVendor = async () => {
+    const name = vName.trim();
+    if (name.length < 2) { setErr('Enter the vendor name.'); return; }
+    setVBusy(true); setErr(null);
+    try {
+      const v = await api.post('/vendors', { requirementId: reqId, name });
+      setExtraVendors(list => [...list, v]);
+      set('vendorId', v.id);
+      setVName(''); setVAdding(false);
+    } catch (e) { setErr(e.message || 'Could not add vendor.'); }
+    finally { setVBusy(false); }
+  };
 
   const submit = async () => {
     if (f.title.trim().length < 3) { setErr('Give the plan a name (3+ chars).'); return; }
@@ -779,6 +800,33 @@ function ComposePlan({ open, onClose, reqId, onPosted, isDesktop }) {
           <input className="form-input" value={f.inverter} onChange={e => set('inverter', e.target.value)} placeholder="e.g. brand or supplier" maxLength={60} />
         </div>
       </div>
+
+      <label className="form-label" style={{ marginTop: 16 }}>Vendor <span className="muted">(optional)</span></label>
+      <div className="cat-pick-grid">
+        <button type="button" onClick={() => set('vendorId', '')} className={`cat-pick ${!f.vendorId ? 'is-active' : ''}`}>No vendor</button>
+        {allVendors.map(v => (
+          <button key={v.id} type="button" onClick={() => set('vendorId', v.id)} className={`cat-pick ${f.vendorId === v.id ? 'is-active' : ''}`}>{v.name}</button>
+        ))}
+        {!vAdding && (
+          <button type="button" onClick={() => { setVAdding(true); setErr(null); }} className="cat-pick">
+            <Icon name="plus" size={13} /> Add a vendor
+          </button>
+        )}
+      </div>
+      {vAdding && (
+        <div className="flex gap-2 center" style={{ marginTop: 8 }}>
+          <input className="form-input" style={{ flex: 1 }} value={vName} autoFocus maxLength={80}
+            onChange={e => setVName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addVendor(); } }}
+            placeholder="New vendor name" />
+          <button type="button" className="btn btn-primary" style={{ padding: '9px 14px' }} disabled={vBusy} onClick={addVendor}>
+            {vBusy ? '…' : 'Add'}
+          </button>
+          <button type="button" className="btn btn-ghost" style={{ padding: '9px 11px' }} onClick={() => { setVAdding(false); setVName(''); }} aria-label="Cancel">
+            <Icon name="close" size={14} />
+          </button>
+        </div>
+      )}
 
       {err && <div className="form-err">{err}</div>}
       <button className="btn btn-primary btn-full" disabled={busy} onClick={submit}>
@@ -947,8 +995,11 @@ function RequirementScreen({ ctx, reqId }) {
   const [pollOpen, setPollOpen] = useState(false);
   const [resourceOpen, setResourceOpen] = useState(false);
   const [vendorOpen, setVendorOpen] = useState(false);
+  const [adoptBusy, setAdoptBusy] = useState(null);
+  const [saveBusy, setSaveBusy] = useState(false);
 
   const isTracking = (me.activeReqs || []).some(r => r.id === reqId);
+  const isSaved = (me.wishlist || []).includes(reqId);
 
   const load = useCallback(
     () => api.get(`/requirements/${reqId}`).then(setData).catch(e => setErr(e.message)),
@@ -989,6 +1040,44 @@ function RequirementScreen({ ctx, reqId }) {
     }
   };
 
+  const toggleSaved = async () => {
+    if (saveBusy) return;
+    setSaveBusy(true);
+    try {
+      if (isSaved) {
+        await api.del(`/me/wishlist/${reqId}`);
+        showToast('Removed from Wishlist');
+      } else {
+        await api.post(`/me/wishlist/${reqId}`, {});
+        showToast('Saved to Wishlist');
+      }
+      refreshMe?.();
+    } catch (e) {
+      showToast('Could not update');
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
+  const adoptPlan = async (p) => {
+    if (adoptBusy) return;
+    setAdoptBusy(p.id);
+    try {
+      if (p.adopted) {
+        await api.del(`/plans/${p.id}/adopt`);
+        showToast('No longer using this plan');
+      } else {
+        await api.post(`/plans/${p.id}/adopt`, {});
+        showToast("You're using this plan");
+      }
+      await load();
+    } catch (e) {
+      showToast('Could not update');
+    } finally {
+      setAdoptBusy(null);
+    }
+  };
+
   if (err) return <div><BackBar onBack={goBack} title="Couldn't load" /><div style={{ padding: '0 20px' }} className="text-sm muted">{err}</div></div>;
   if (!data) return <BackBar onBack={goBack} title="Loading…" />;
 
@@ -999,14 +1088,24 @@ function RequirementScreen({ ctx, reqId }) {
     <div>
       <BackBar onBack={goBack} title={data.title} subtitle={`${data.active} active · ${data.vendors.length} vendors`} />
 
-      <div style={{ padding: isDesktop ? '0 0 16px' : '0 20px 16px' }}>
+      <div className="flex gap-2" style={{ padding: isDesktop ? '0 0 16px' : '0 20px 16px' }}>
         <button
           className={`btn ${isTracking ? 'btn-ghost' : 'btn-primary'}`}
-          style={{ width: '100%', justifyContent: 'center' }}
+          style={{ flex: 1, justifyContent: 'center' }}
           disabled={trackBusy}
           onClick={toggleTracking}>
           <Icon name={isTracking ? 'check' : 'plus'} size={16} />
           {trackBusy ? '…' : (isTracking ? 'Tracking · tap to remove' : 'Add to My active')}
+        </button>
+        <button
+          className={`btn ${isSaved ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ justifyContent: 'center' }}
+          disabled={saveBusy}
+          aria-label={isSaved ? 'Remove from Wishlist' : 'Save to Wishlist'}
+          title={isSaved ? 'Remove from Wishlist' : 'Save to Wishlist'}
+          onClick={toggleSaved}>
+          <Icon name={isSaved ? 'starFill' : 'star'} size={16} color="currentColor" />
+          {saveBusy ? '…' : (isSaved ? 'Saved' : 'Save')}
         </button>
       </div>
 
@@ -1050,6 +1149,23 @@ function RequirementScreen({ ctx, reqId }) {
                             {p.inverter && <span>{p.inverter}</span>}
                           </div>
                         )}
+                        <div className="flex gap-2 center mt-3 wrap">
+                          {p.vendorInfo && (
+                            <button type="button" className="chip chip-sage" style={{ fontSize: 11 }}
+                              onClick={() => navigate({ kind: 'vendor', id: p.vendorInfo.id })}>
+                              <Icon name="store" size={11} /> {p.vendorInfo.name}
+                            </button>
+                          )}
+                          {p.authorInfo?.name && <span className="text-xs muted">Added by {p.authorInfo.name}</span>}
+                        </div>
+                        <button type="button"
+                          className={`btn ${p.adopted ? 'btn-ghost' : 'btn-primary'}`}
+                          style={{ marginTop: 12, padding: '7px 13px', fontSize: 13 }}
+                          disabled={adoptBusy === p.id}
+                          onClick={() => adoptPlan(p)}>
+                          <Icon name={p.adopted ? 'check' : 'plus'} size={14} />
+                          {adoptBusy === p.id ? '…' : (p.adopted ? 'Using this plan' : 'Use this plan')}
+                        </button>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         {p.cost && <div className="price">{p.cost}</div>}
@@ -1214,6 +1330,7 @@ function RequirementScreen({ ctx, reqId }) {
         open={planOpen}
         onClose={() => setPlanOpen(false)}
         reqId={reqId}
+        vendors={data.vendors}
         isDesktop={isDesktop}
         onPosted={() => { showToast('Plan added'); load(); }}
       />
@@ -1568,6 +1685,84 @@ function PlansScreen({ ctx }) {
               <span className="text-xs muted">{p.authorInfo?.name?.split(' ')[0] || p.author} · {p.usedBy} flats use this</span>
             </div>
           </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Wishlist ───────────────────────────────────────────────
+// A private, reorderable list of requirements the member has in mind.
+function WishlistScreen({ ctx }) {
+  const { navigate, showToast, isDesktop, refreshMe } = ctx;
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.get('/me/wishlist').then(list => { setItems(list); setLoading(false); })
+      .catch(() => { setItems([]); setLoading(false); });
+  }, []);
+
+  // Persist a reordered list; revert to the previous order on failure.
+  const persist = async (next, prev) => {
+    setBusy(true);
+    try { await api.patch('/me/wishlist/order', { order: next.map(i => i.id) }); }
+    catch (e) { setItems(prev); showToast('Could not reorder'); }
+    finally { setBusy(false); }
+  };
+
+  const move = (idx, dir) => {
+    const j = idx + dir;
+    if (busy || j < 0 || j >= items.length) return;
+    const prev = items;
+    const next = items.slice();
+    [next[idx], next[j]] = [next[j], next[idx]];
+    setItems(next);
+    persist(next, prev);
+  };
+
+  const remove = async (id) => {
+    const prev = items;
+    setItems(cs => cs.filter(i => i.id !== id));
+    try { await api.del(`/me/wishlist/${id}`); refreshMe?.(); }
+    catch (e) { setItems(prev); showToast('Could not remove'); }
+  };
+
+  return (
+    <div>
+      {!isDesktop && <div className="topbar"><h2 className="text-display" style={{ margin: 0, fontSize: 22 }}>Wishlist</h2></div>}
+      {isDesktop && <h1 className="text-display" style={{ margin: '0 0 6px', fontSize: 28 }}>Wishlist</h1>}
+      <p className="text-sm muted" style={{ padding: isDesktop ? 0 : '0 20px', marginTop: 0, marginBottom: 16 }}>
+        Requirements you have in mind — in your priority order.
+      </p>
+
+      <div className="card card-pad" style={{ margin: isDesktop ? '8px 0 0' : '0 20px' }}>
+        {!loading && items.length === 0 && (
+          <div className="text-sm muted">Nothing saved yet — tap the star on any requirement to line it up here.</div>
+        )}
+        {items.map((r, i) => (
+          <div key={r.id} className="wishlist-row">
+            <span className="wishlist-rank">{i + 1}</span>
+            <button className="wishlist-main" onClick={() => navigate({ kind: 'req', id: r.id })}>
+              <div className="wishlist-emoji">{r.emoji}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="text-display font-semibold" style={{ fontSize: 15 }}>{r.title}</div>
+                <div className="text-xs muted mt-2">{r.active} active · {r.plans} plans</div>
+              </div>
+            </button>
+            <div className="wishlist-actions">
+              <button className="wishlist-btn" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label="Move up">
+                <Icon name="chevronDown" size={16} style={{ transform: 'rotate(180deg)' }} />
+              </button>
+              <button className="wishlist-btn" disabled={busy || i === items.length - 1} onClick={() => move(i, 1)} aria-label="Move down">
+                <Icon name="chevronDown" size={16} />
+              </button>
+              <button className="wishlist-btn" onClick={() => remove(r.id)} aria-label="Remove from wishlist">
+                <Icon name="close" size={16} />
+              </button>
+            </div>
+          </div>
         ))}
       </div>
     </div>

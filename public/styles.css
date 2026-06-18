@@ -446,6 +446,35 @@ em { font-style: italic; }
 }
 .add-checklist input:focus { outline: 2px solid var(--cb-primary-soft); }
 
+/* ─── Wishlist tab ─── */
+.wishlist-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 0; border-bottom: 1px solid var(--cb-border);
+}
+.wishlist-row:last-child { border-bottom: 0; }
+.wishlist-rank {
+  flex: none; width: 24px; text-align: center;
+  font-family: var(--cb-display); font-weight: 700;
+  font-size: 14px; color: var(--cb-muted);
+}
+.wishlist-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+  text-align: left; background: none; border: 0; padding: 0; cursor: pointer;
+}
+.wishlist-emoji {
+  width: 44px; height: 44px; border-radius: 12px; flex: none;
+  background: var(--cb-cream); display: grid; place-items: center; font-size: 22px;
+}
+.wishlist-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+.wishlist-btn {
+  width: 32px; height: 32px; border-radius: 8px; flex: none;
+  display: grid; place-items: center; cursor: pointer;
+  color: var(--cb-muted); background: none; border: 0;
+  transition: background .15s, color .15s;
+}
+.wishlist-btn:hover:not(:disabled) { background: var(--cb-cream); color: var(--cb-ink); }
+.wishlist-btn:disabled { opacity: 0.3; cursor: default; }
+
 /* ─── Back row ─── */
 .back-row {
   display: flex; align-items: center; gap: 10px;
